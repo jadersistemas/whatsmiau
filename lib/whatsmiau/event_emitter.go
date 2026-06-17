@@ -188,7 +188,16 @@ func (s *Whatsmiau) Handle(id string) whatsmeow.EventHandler {
 	return func(evt any) {
 		s.handlerSemaphore <- struct{}{}
 		go func() {
-			defer func() { <-s.handlerSemaphore }()
+			defer func() {
+				if r := recover(); r != nil {
+					zap.L().Error("panic in event handler",
+						zap.String("instance", id),
+						zap.Any("panic", r),
+						zap.Stack("stack"),
+					)
+				}
+				<-s.handlerSemaphore
+			}()
 			instance := s.getInstanceCached(id)
 			if instance == nil {
 				zap.L().Warn("no instance found for event", zap.String("instance", id))
@@ -1291,6 +1300,11 @@ func (s *Whatsmiau) getPic(id string, jid types.JID) (string, string, error) {
 	if !ok || client == nil {
 		zap.L().Warn("no client for event", zap.String("id", id))
 		return "", "", fmt.Errorf("no client for event %s", id)
+	}
+
+	if !client.IsConnected() {
+		zap.L().Warn("client not connected, skipping getPic", zap.String("id", id))
+		return "", "", fmt.Errorf("client not connected for %s", id)
 	}
 
 	pic, err := client.GetProfilePictureInfo(context.TODO(), jid, &whatsmeow.GetProfilePictureParams{
