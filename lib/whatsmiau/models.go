@@ -177,17 +177,10 @@ type ReactionMessageRaw struct {
 	SenderTimestampMs string   `json:"senderTimestampMs,omitempty"`
 }
 
-type WookTargetMessageKey struct {
-	RemoteJid   string `json:"remoteJid,omitempty"`
-	FromMe      bool   `json:"fromMe,omitempty"`
-	Id          string `json:"id,omitempty"`
-	Participant string `json:"participant,omitempty"`
-}
-
 type WookEncCommentMessageRaw struct {
-	TargetMessageKey *WookTargetMessageKey `json:"targetMessageKey,omitempty"`
-	EncPayload       []byte                `json:"encPayload,omitempty"`
-	EncIv            []byte                `json:"encIv,omitempty"`
+	TargetMessageKey *WookKey `json:"targetMessageKey,omitempty"`
+	EncPayload       string   `json:"encPayload,omitempty"`
+	EncIv            string   `json:"encIv,omitempty"`
 }
 
 type WookAudioMessageRaw struct {

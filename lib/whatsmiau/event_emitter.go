@@ -819,17 +819,16 @@ func (s *Whatsmiau) parseWAMessage(m *waE2E.Message) (string, *WookMessageRaw, *
 		ci = et.GetContextInfo()
 	} else if ec := m.GetEncCommentMessage(); ec != nil {
 		messageType = "encCommentMessage"
-		targetKey := ec.GetTargetMessageKey()
-		if targetKey != nil {
-			raw.EncCommentMessage = &WookEncCommentMessageRaw{
-				TargetMessageKey: &WookTargetMessageKey{
-					RemoteJid:   targetKey.GetRemoteJID(),
-					FromMe:      targetKey.GetFromMe(),
-					Id:          targetKey.GetID(),
-					Participant: targetKey.GetParticipant(),
-				},
-				EncPayload: ec.GetEncPayload(),
-				EncIv:      ec.GetEncIV(),
+		raw.EncCommentMessage = &WookEncCommentMessageRaw{
+			EncPayload: b64(ec.GetEncPayload()),
+			EncIv:      b64(ec.GetEncIV()),
+		}
+		if targetKey := ec.GetTargetMessageKey(); targetKey != nil {
+			raw.EncCommentMessage.TargetMessageKey = &WookKey{
+				RemoteJid:   targetKey.GetRemoteJID(),
+				FromMe:      targetKey.GetFromMe(),
+				Id:          targetKey.GetID(),
+				Participant: targetKey.GetParticipant(),
 			}
 		}
 	} else {
@@ -946,9 +945,9 @@ func (s *Whatsmiau) convertEventMessage(id string, instance *models.Instance, ev
 	m := e.Message
 
 	// Build the key
-	addressingMode := "jid"
-	if lid != "" {
-		addressingMode = "lid"
+	addressingMode := "lid"
+	if lid == "" {
+		addressingMode = "jid"
 	}
 	key := &WookKey{
 		RemoteJid:       jid,
