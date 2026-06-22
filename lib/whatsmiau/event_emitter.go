@@ -817,6 +817,20 @@ func (s *Whatsmiau) parseWAMessage(m *waE2E.Message) (string, *WookMessageRaw, *
 		messageType = "conversation"
 		raw.Conversation = et.GetText()
 		ci = et.GetContextInfo()
+	} else if ec := m.GetEncCommentMessage(); ec != nil {
+		messageType = "encCommentMessage"
+		raw.EncCommentMessage = &WookEncCommentMessageRaw{
+			EncPayload: b64(ec.GetEncPayload()),
+			EncIv:      b64(ec.GetEncIV()),
+		}
+		if targetKey := ec.GetTargetMessageKey(); targetKey != nil {
+			raw.EncCommentMessage.TargetMessageKey = &WookKey{
+				RemoteJid:   targetKey.GetRemoteJID(),
+				FromMe:      targetKey.GetFromMe(),
+				Id:          targetKey.GetID(),
+				Participant: targetKey.GetParticipant(),
+			}
+		}
 	} else {
 		messageType = "unknown"
 	}
@@ -931,12 +945,17 @@ func (s *Whatsmiau) convertEventMessage(id string, instance *models.Instance, ev
 	m := e.Message
 
 	// Build the key
+	addressingMode := "lid"
+	if lid == "" {
+		addressingMode = "jid"
+	}
 	key := &WookKey{
-		RemoteJid:   jid,
-		RemoteLid:   lid,
-		FromMe:      e.Info.IsFromMe,
-		Id:          e.Info.ID,
-		Participant: senderJid,
+		RemoteJid:       jid,
+		RemoteLid:       lid,
+		FromMe:          e.Info.IsFromMe,
+		Id:              e.Info.ID,
+		Participant:     senderJid,
+		AddressingMode:  addressingMode,
 	}
 
 	// Determine status
