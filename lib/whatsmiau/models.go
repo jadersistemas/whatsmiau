@@ -32,7 +32,7 @@ type WookMessageData struct {
 	PushName         string                  `json:"pushName,omitempty"`
 	Status           string                  `json:"status,omitempty"`
 	Message          *WookMessageRaw         `json:"message,omitempty"`
-	ContextInfo      *WookMessageContextInfo  `json:"contextInfo,omitempty"`
+	ContextInfo      *WookMessageContextInfo `json:"contextInfo,omitempty"`
 	MessageType      string                  `json:"messageType,omitempty"`
 	MessageTimestamp int                     `json:"messageTimestamp,omitempty"`
 	InstanceId       string                  `json:"instanceId,omitempty"`
@@ -84,11 +84,12 @@ type WookMessageExtendedTextMessageContextInfo struct {
 }
 
 type WookKey struct {
-	RemoteJid   string `json:"remoteJid,omitempty"`
-	RemoteLid   string `json:"remoteLid,omitempty"`
-	FromMe      bool   `json:"fromMe,omitempty"`
-	Id          string `json:"id,omitempty"`
-	Participant string `json:"participant,omitempty"`
+	RemoteJid      string `json:"remoteJid,omitempty"`
+	RemoteLid      string `json:"remoteLid,omitempty"`
+	FromMe         bool   `json:"fromMe,omitempty"`
+	Id             string `json:"id,omitempty"`
+	Participant    string `json:"participant,omitempty"`
+	AddressingMode string `json:"addressingMode,omitempty"`
 }
 
 type WookMessageRaw struct {
@@ -110,6 +111,7 @@ type WookMessageRaw struct {
 	PollCreationMessage *WookPollCreationMessageRaw `json:"pollCreationMessage,omitempty"`
 	PollUpdateMessage   *WookPollUpdateMessageRaw   `json:"pollUpdateMessage,omitempty"`
 	PtvMessage          *WookPtvMessageRaw          `json:"ptvMessage,omitempty"`
+	EncCommentMessage   *WookEncCommentMessageRaw   `json:"encCommentMessage,omitempty"`
 	MediaURL            string                      `json:"mediaUrl,omitempty"` // Sent when connect with some storage
 }
 
@@ -173,6 +175,19 @@ type ReactionMessageRaw struct {
 	Key               *WookKey `json:"key,omitempty"`
 	Text              string   `json:"text,omitempty"`
 	SenderTimestampMs string   `json:"senderTimestampMs,omitempty"`
+}
+
+type WookTargetMessageKey struct {
+	RemoteJid   string `json:"remoteJid,omitempty"`
+	FromMe      bool   `json:"fromMe,omitempty"`
+	Id          string `json:"id,omitempty"`
+	Participant string `json:"participant,omitempty"`
+}
+
+type WookEncCommentMessageRaw struct {
+	TargetMessageKey *WookTargetMessageKey `json:"targetMessageKey,omitempty"`
+	EncPayload       []byte                `json:"encPayload,omitempty"`
+	EncIv            []byte                `json:"encIv,omitempty"`
 }
 
 type WookAudioMessageRaw struct {
