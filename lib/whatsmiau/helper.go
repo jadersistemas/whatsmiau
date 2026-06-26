@@ -547,11 +547,12 @@ func statusFromHistory(status waWeb.WebMessageInfo_Status, fromMe bool) string {
 // O padrão é pt-BR (base de usuários atual). Adicione novos idiomas estendendo o mapa.
 var fromMePushNames = map[string]string{
 	"pt-BR": "Você",
+	"en":    "You",
 }
 
 func fromMePushName(locale string) string {
 	if name, ok := fromMePushNames[locale]; ok {
 		return name
 	}
-	return fromMePushNames["pt-BR"]
+	return "You"
 }
