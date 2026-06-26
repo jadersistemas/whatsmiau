@@ -455,7 +455,6 @@ func (s *Whatsmiau) handlePictureEvent(id string, instance *models.Instance, e *
 }
 
 var (
-	historySyncStarted  sync.Map
 	historySyncWatchdog sync.Map
 	historySyncProgress sync.Map
 )
@@ -467,10 +466,6 @@ func (s *Whatsmiau) handleHistorySyncEvent(id string, instance *models.Instance,
 	isLatest := progress >= 100
 
 	if instance.SyncFullHistory && eventMap["MESSAGES_UPSERT"] {
-		_, alreadyStarted := historySyncStarted.LoadOrStore(id, true)
-		if !alreadyStarted {
-		}
-
 		var messages []WookMessageData
 		for _, conv := range e.Data.Conversations {
 			for _, msg := range conv.GetMessages() {
@@ -530,7 +525,6 @@ func (s *Whatsmiau) handleHistorySyncEvent(id string, instance *models.Instance,
 
 func cleanHistorySyncState(id string) {
 	historySyncWatchdog.Delete(id)
-	historySyncStarted.Delete(id)
 	historySyncProgress.Delete(id)
 }
 
