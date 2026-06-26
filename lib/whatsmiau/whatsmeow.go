@@ -15,12 +15,14 @@ import (
 	"github.com/verbeux-ai/whatsmiau/repositories/instances"
 	"github.com/verbeux-ai/whatsmiau/services"
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/proto/waCompanionReg"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
 	waLog "go.mau.fi/whatsmeow/util/log"
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
+	"google.golang.org/protobuf/proto"
 )
 
 type Whatsmiau struct {
@@ -257,6 +259,27 @@ func (s *Whatsmiau) ensurePairingCode(ctx context.Context, id string, client *wh
 	return code
 }
 
+var devicePropsMu sync.Mutex
+
+func applyDevicePropsForInstance(instance *models.Instance) {
+	if instance.SyncFullHistory {
+		store.DeviceProps.RequireFullSync = proto.Bool(true)
+		if store.DeviceProps.HistorySyncConfig == nil {
+			store.DeviceProps.HistorySyncConfig = &waCompanionReg.DeviceProps_HistorySyncConfig{}
+		}
+		store.DeviceProps.HistorySyncConfig.FullSyncDaysLimit = proto.Uint32(3650)
+		store.DeviceProps.HistorySyncConfig.FullSyncSizeMbLimit = proto.Uint32(51200)
+		store.DeviceProps.HistorySyncConfig.StorageQuotaMb = proto.Uint32(51200)
+	} else {
+		store.DeviceProps.RequireFullSync = nil
+		if store.DeviceProps.HistorySyncConfig != nil {
+			store.DeviceProps.HistorySyncConfig.FullSyncDaysLimit = nil
+			store.DeviceProps.HistorySyncConfig.FullSyncSizeMbLimit = nil
+			store.DeviceProps.HistorySyncConfig.StorageQuotaMb = nil
+		}
+	}
+}
+
 func (s *Whatsmiau) generateClient(ctx context.Context, id string) (*whatsmeow.Client, error) {
 	lock, _ := s.lockConnection.LoadOrStore(id, &sync.Mutex{})
 	lock.Lock()
@@ -265,7 +288,14 @@ func (s *Whatsmiau) generateClient(ctx context.Context, id string) (*whatsmeow.C
 	client, ok := s.clients.Load(id)
 	if !ok {
 		device := s.container.NewDevice()
+
+		devicePropsMu.Lock()
+		if inst := s.getInstanceCached(id); inst != nil {
+			applyDevicePropsForInstance(inst)
+		}
 		client = whatsmeow.NewClient(device, s.logger)
+		devicePropsMu.Unlock()
+
 		s.clients.Store(id, client)
 	}
 
@@ -297,7 +327,15 @@ func (s *Whatsmiau) generateClient(ctx context.Context, id string) (*whatsmeow.C
 		}
 
 		device := s.container.NewDevice()
-		client = whatsmeow.NewClient(device, s.logger)
+
+		if inst := s.getInstanceCached(id); inst != nil {
+			devicePropsMu.Lock()
+			applyDevicePropsForInstance(inst)
+			client = whatsmeow.NewClient(device, s.logger)
+			devicePropsMu.Unlock()
+		} else {
+			client = whatsmeow.NewClient(device, s.logger)
+		}
 		s.clients.Store(id, client) // replaces old client
 	}
 
