@@ -535,11 +535,18 @@ func cleanHistorySyncState(id string) {
 }
 
 func (s *Whatsmiau) resetHistorySyncWatchdog(id string) {
-	watchdog, loaded := historySyncWatchdog.LoadOrStore(id, time.AfterFunc(historySyncTimeout, func() {
+	if existing, ok := historySyncWatchdog.Load(id); ok {
+		existing.(*time.Timer).Reset(historySyncTimeout)
+		return
+	}
+
+	newTimer := time.AfterFunc(historySyncTimeout, func() {
 		cleanHistorySyncState(id)
-	}))
+	})
+	actual, loaded := historySyncWatchdog.LoadOrStore(id, newTimer)
 	if loaded {
-		watchdog.(*time.Timer).Reset(historySyncTimeout)
+		newTimer.Stop()
+		actual.(*time.Timer).Reset(historySyncTimeout)
 	}
 }
 
