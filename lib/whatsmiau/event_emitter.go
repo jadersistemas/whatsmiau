@@ -247,6 +247,8 @@ func (s *Whatsmiau) Handle(id string) whatsmeow.EventHandler {
 			case *events.ConnectFailure:
 				s.handleConnectionUpdateEvent(id, instance, "close", int(e.Reason), eventMap)
 				s.stopHistorySyncWatchdog(id)
+			case *events.StreamReplaced:
+				s.stopHistorySyncWatchdog(id)
 			default:
 				zap.L().Debug("unknown event", zap.String("type", fmt.Sprintf("%T", evt)), zap.Any("raw", evt))
 			}
@@ -255,6 +257,8 @@ func (s *Whatsmiau) Handle(id string) whatsmeow.EventHandler {
 }
 
 func (s *Whatsmiau) handleLoggedOut(id string) {
+	s.stopHistorySyncWatchdog(id)
+
 	client, ok := s.clients.Load(id)
 	if ok {
 		if err := s.deleteDeviceIfExists(context.Background(), client); err != nil {
@@ -459,7 +463,7 @@ var (
 	historySyncProgress sync.Map
 )
 
-const historySyncTimeout = 60 * time.Second
+const historySyncTimeout = 180 * time.Second
 
 func (s *Whatsmiau) handleHistorySyncEvent(id string, instance *models.Instance, e *events.HistorySync, eventMap map[string]bool) {
 	if e == nil || e.Data == nil {
