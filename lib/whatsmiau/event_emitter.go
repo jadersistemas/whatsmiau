@@ -462,6 +462,10 @@ var (
 const historySyncTimeout = 60 * time.Second
 
 func (s *Whatsmiau) handleHistorySyncEvent(id string, instance *models.Instance, e *events.HistorySync, eventMap map[string]bool) {
+	if e == nil || e.Data == nil {
+		return
+	}
+
 	progress := e.Data.GetProgress()
 	isLatest := progress >= 100
 
