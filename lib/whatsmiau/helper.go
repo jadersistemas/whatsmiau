@@ -20,6 +20,7 @@ import (
 	"github.com/verbeux-ai/whatsmiau/env"
 	"github.com/verbeux-ai/whatsmiau/models"
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/proto/waWeb"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	"go.uber.org/zap"
@@ -457,4 +458,101 @@ func buildBrazilianAlternate(number string) string {
 	default:
 		return ""
 	}
+}
+
+func (s *Whatsmiau) buildMessageDataFromHistory(msg *waWeb.WebMessageInfo, convName, displayName string) *WookMessageData {
+	if msg == nil || msg.Message == nil {
+		return nil
+	}
+
+	key := msg.GetKey()
+	if key == nil {
+		return nil
+	}
+
+	messageType, raw, ci := s.parseWAMessage(msg.Message)
+	if messageType == "" {
+		return nil
+	}
+
+	wookKey := &WookKey{
+		RemoteJid:      key.GetRemoteJID(),
+		FromMe:         key.GetFromMe(),
+		Id:             key.GetID(),
+		Participant:    key.GetParticipant(),
+		AddressingMode: "jid",
+	}
+
+	status := statusFromHistory(msg.GetStatus(), key.GetFromMe())
+
+	pushName := msg.GetPushName()
+	if key.GetFromMe() {
+		if pushName == "" {
+			pushName = fromMePushName("pt-BR")
+		}
+	} else if pushName == "" {
+
+		if jid := key.GetRemoteJID(); jid != "" {
+			if idx := strings.Index(jid, "@"); idx != -1 {
+				pushName = jid[:idx]
+			}
+		}
+		if pushName == "" {
+			switch {
+			case convName != "":
+				pushName = convName
+			case displayName != "":
+				pushName = displayName
+			}
+		}
+	}
+
+	var contextInfo *WookMessageContextInfo
+	if ci != nil {
+		contextInfo = &WookMessageContextInfo{
+			StanzaId:     ci.GetStanzaID(),
+			Participant:  ci.GetParticipant(),
+			Expiration:   int(ci.GetExpiration()),
+			MentionedJid: ci.GetMentionedJID(),
+		}
+		if qm := ci.GetQuotedMessage(); qm != nil {
+			_, qmRaw, _ := s.parseWAMessage(qm)
+			contextInfo.QuotedMessage = qmRaw
+		}
+	}
+
+	return &WookMessageData{
+		Key:              wookKey,
+		PushName:         pushName,
+		Status:           status,
+		Message:          raw,
+		MessageType:      messageType,
+		MessageTimestamp: int(msg.GetMessageTimestamp()),
+		Source:           "unknown",
+		ContextInfo:      contextInfo,
+	}
+}
+
+func statusFromHistory(status waWeb.WebMessageInfo_Status, fromMe bool) string {
+	if fromMe {
+		return "SENT"
+	}
+	if status == waWeb.WebMessageInfo_ERROR {
+		return "DELIVERY_ACK"
+	}
+	return waWeb.WebMessageInfo_Status_name[int32(status)]
+}
+
+// fromMePushNames mapeia locale → push name para mensagens enviadas pelo usuário.
+// O padrão é pt-BR (base de usuários atual). Adicione novos idiomas estendendo o mapa.
+var fromMePushNames = map[string]string{
+	"pt-BR": "Você",
+	"en":    "You",
+}
+
+func fromMePushName(locale string) string {
+	if name, ok := fromMePushNames[locale]; ok {
+		return name
+	}
+	return "You"
 }

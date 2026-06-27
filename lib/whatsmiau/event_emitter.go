@@ -243,8 +243,12 @@ func (s *Whatsmiau) Handle(id string) whatsmeow.EventHandler {
 				s.handleConnectionUpdateEvent(id, instance, "open", 200, eventMap)
 			case *events.Disconnected:
 				s.handleConnectionUpdateEvent(id, instance, "close", 0, eventMap)
+				s.stopHistorySyncWatchdog(id)
 			case *events.ConnectFailure:
 				s.handleConnectionUpdateEvent(id, instance, "close", int(e.Reason), eventMap)
+				s.stopHistorySyncWatchdog(id)
+			case *events.StreamReplaced:
+				s.stopHistorySyncWatchdog(id)
 			default:
 				zap.L().Debug("unknown event", zap.String("type", fmt.Sprintf("%T", evt)), zap.Any("raw", evt))
 			}
@@ -253,6 +257,8 @@ func (s *Whatsmiau) Handle(id string) whatsmeow.EventHandler {
 }
 
 func (s *Whatsmiau) handleLoggedOut(id string) {
+	s.stopHistorySyncWatchdog(id)
+
 	client, ok := s.clients.Load(id)
 	if ok {
 		if err := s.deleteDeviceIfExists(context.Background(), client); err != nil {
@@ -452,7 +458,60 @@ func (s *Whatsmiau) handlePictureEvent(id string, instance *models.Instance, e *
 	s.emit(wookData, instance.Webhook.Url)
 }
 
+var (
+	historySyncWatchdog sync.Map
+	historySyncProgress sync.Map
+)
+
+const historySyncTimeout = 180 * time.Second
+
 func (s *Whatsmiau) handleHistorySyncEvent(id string, instance *models.Instance, e *events.HistorySync, eventMap map[string]bool) {
+	if e == nil || e.Data == nil {
+		return
+	}
+
+	progress := e.Data.GetProgress()
+	isLatest := progress >= 100
+
+	if instance.SyncFullHistory && eventMap["MESSAGES_UPSERT"] {
+		var messages []WookMessageData
+		for _, conv := range e.Data.Conversations {
+			for _, msg := range conv.GetMessages() {
+				if msg.Message == nil || msg.Message.Message == nil {
+					continue
+				}
+
+				messageData := s.buildMessageDataFromHistory(msg.Message, conv.GetName(), conv.GetDisplayName())
+				if messageData == nil {
+					continue
+				}
+
+				messageData.InstanceId = instance.ID
+				messages = append(messages, *messageData)
+			}
+		}
+
+		if len(messages) > 0 {
+			prog := int(progress)
+			wookEvent := &WookEvent[[]WookMessageData]{
+				Instance: instance.ID,
+				Data:     &messages,
+				DateTime: time.Now(),
+				Event:    WookMessagesSet,
+				IsLatest: &isLatest,
+				Progress: &prog,
+			}
+			s.emit(wookEvent, instance.Webhook.Url)
+		}
+
+		if isLatest {
+			s.stopHistorySyncWatchdog(id)
+		} else {
+			historySyncProgress.Store(id, progress)
+			s.resetHistorySyncWatchdog(id)
+		}
+	}
+
 	if !eventMap["CONTACTS_UPSERT"] {
 		return
 	}
@@ -470,6 +529,34 @@ func (s *Whatsmiau) handleHistorySyncEvent(id string, instance *models.Instance,
 	}
 
 	s.emit(wookData, instance.Webhook.Url)
+}
+
+func cleanHistorySyncState(id string) {
+	historySyncWatchdog.Delete(id)
+	historySyncProgress.Delete(id)
+}
+
+func (s *Whatsmiau) resetHistorySyncWatchdog(id string) {
+	if existing, ok := historySyncWatchdog.Load(id); ok {
+		existing.(*time.Timer).Reset(historySyncTimeout)
+		return
+	}
+
+	newTimer := time.AfterFunc(historySyncTimeout, func() {
+		cleanHistorySyncState(id)
+	})
+	actual, loaded := historySyncWatchdog.LoadOrStore(id, newTimer)
+	if loaded {
+		newTimer.Stop()
+		actual.(*time.Timer).Reset(historySyncTimeout)
+	}
+}
+
+func (s *Whatsmiau) stopHistorySyncWatchdog(id string) {
+	if watchdog, ok := historySyncWatchdog.Load(id); ok {
+		watchdog.(*time.Timer).Stop()
+	}
+	cleanHistorySyncState(id)
 }
 
 func (s *Whatsmiau) handleGroupInfoEvent(id string, instance *models.Instance, e *events.GroupInfo, eventMap map[string]bool) {
@@ -950,12 +1037,12 @@ func (s *Whatsmiau) convertEventMessage(id string, instance *models.Instance, ev
 		addressingMode = "jid"
 	}
 	key := &WookKey{
-		RemoteJid:       jid,
-		RemoteLid:       lid,
-		FromMe:          e.Info.IsFromMe,
-		Id:              e.Info.ID,
-		Participant:     senderJid,
-		AddressingMode:  addressingMode,
+		RemoteJid:      jid,
+		RemoteLid:      lid,
+		FromMe:         e.Info.IsFromMe,
+		Id:             e.Info.ID,
+		Participant:    senderJid,
+		AddressingMode: addressingMode,
 	}
 
 	// Determine status

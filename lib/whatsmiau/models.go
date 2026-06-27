@@ -10,6 +10,7 @@ type Wook string
 
 const (
 	WookMessagesUpsert   Wook = "messages.upsert"
+	WookMessagesSet      Wook = "messages.set"
 	WookMessagesUpdate   Wook = "messages.update"
 	WookContactsUpsert   Wook = "contacts.upsert"
 	WookConnectionUpdate Wook = "connection.update"
@@ -25,6 +26,8 @@ type WookEvent[data any] struct {
 	ServerUrl   string    `json:"server_url,omitempty"`
 	Apikey      string    `json:"apikey,omitempty"`
 	Event       Wook      `json:"event,omitempty"`
+	IsLatest    *bool     `json:"isLatest,omitempty"`
+	Progress    *int      `json:"progress,omitempty"`
 }
 
 type WookMessageData struct {
