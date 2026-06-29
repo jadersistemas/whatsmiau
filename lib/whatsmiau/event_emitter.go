@@ -473,7 +473,7 @@ func (s *Whatsmiau) handleHistorySyncEvent(id string, instance *models.Instance,
 	progress := e.Data.GetProgress()
 	isLatest := progress >= 100
 
-	if instance.SyncFullHistory && eventMap["MESSAGES_UPSERT"] {
+	if instance.SyncFullHistory && eventMap["MESSAGES_SET"] {
 		var messages []WookMessageData
 		for _, conv := range e.Data.Conversations {
 			for _, msg := range conv.GetMessages() {
