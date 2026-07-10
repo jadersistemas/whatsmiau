@@ -488,7 +488,7 @@ func (s *Whatsmiau) handleGroupInfoEvent(id string, instance *models.Instance, e
 	s.emit(wookData, instance.Webhook.Url)
 }
 
-func (s *Whatsmiau) emitGroupParticipantsUpdate(id string, instance *models.Instance, groupJID string, author string, participantJIDs []types.JID, timestamp time.Time) {
+func (s *Whatsmiau) emitGroupParticipantsUpdate(id string, instance *models.Instance, groupJID string, author string, participantJIDs []types.JID, timestamp time.Time, action string, admin *bool) {
 	ctx := context.Background()
 
 	participants := make([]WookGroupParticipantJID, 0, len(participantJIDs))
@@ -500,7 +500,7 @@ func (s *Whatsmiau) emitGroupParticipantsUpdate(id string, instance *models.Inst
 		p := WookGroupParticipantJID{
 			ID:          lid,
 			PhoneNumber: jid,
-			Admin:       nil,
+			Admin:       admin,
 		}
 
 		participants = append(participants, p)
@@ -513,7 +513,7 @@ func (s *Whatsmiau) emitGroupParticipantsUpdate(id string, instance *models.Inst
 		ID:               groupJID,
 		Author:           author,
 		Participants:     participants,
-		Action:           "add",
+		Action:           action,
 		ParticipantsData: participantsData,
 	}
 
@@ -537,16 +537,31 @@ func (s *Whatsmiau) handleGroupParticipantsUpdateEvent(id string, instance *mode
 		return
 	}
 
-	if len(e.Join) == 0 {
-		return
-	}
+	ctx := context.Background()
+	groupJID := e.JID.ToNonAD().String()
 
 	var author string
 	if e.Sender != nil {
-		_, author = s.GetJidLid(context.Background(), id, *e.Sender)
+		_, author = s.GetJidLid(ctx, id, *e.Sender)
 	}
 
-	s.emitGroupParticipantsUpdate(id, instance, e.JID.ToNonAD().String(), author, e.Join, e.Timestamp)
+	if len(e.Join) > 0 {
+		s.emitGroupParticipantsUpdate(id, instance, groupJID, author, e.Join, e.Timestamp, "add", nil)
+	}
+
+	if len(e.Leave) > 0 {
+		s.emitGroupParticipantsUpdate(id, instance, groupJID, author, e.Leave, e.Timestamp, "remove", nil)
+	}
+
+	if len(e.Promote) > 0 {
+		admin := true
+		s.emitGroupParticipantsUpdate(id, instance, groupJID, author, e.Promote, e.Timestamp, "promote", &admin)
+	}
+
+	if len(e.Demote) > 0 {
+		admin := false
+		s.emitGroupParticipantsUpdate(id, instance, groupJID, author, e.Demote, e.Timestamp, "demote", &admin)
+	}
 }
 
 func (s *Whatsmiau) handleJoinedGroupEvent(id string, instance *models.Instance, e *events.JoinedGroup, eventMap map[string]bool) {
@@ -577,7 +592,7 @@ func (s *Whatsmiau) handleJoinedGroupEvent(id string, instance *models.Instance,
 		_, author = s.GetJidLid(context.Background(), id, *e.Sender)
 	}
 
-	s.emitGroupParticipantsUpdate(id, instance, e.JID.ToNonAD().String(), author, []types.JID{instanceJID}, time.Now())
+	s.emitGroupParticipantsUpdate(id, instance, e.JID.ToNonAD().String(), author, []types.JID{instanceJID}, time.Now(), "add", nil)
 }
 
 func (s *Whatsmiau) handlePushNameEvent(id string, instance *models.Instance, e *events.PushName, eventMap map[string]bool) {
