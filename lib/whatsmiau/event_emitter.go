@@ -225,6 +225,9 @@ func (s *Whatsmiau) Handle(id string) whatsmeow.EventHandler {
 				s.handleHistorySyncEvent(id, instance, e, eventMap)
 			case *events.GroupInfo:
 				s.handleGroupInfoEvent(id, instance, e, eventMap)
+				s.handleGroupParticipantsUpdateEvent(id, instance, e, eventMap)
+			case *events.JoinedGroup:
+				s.handleJoinedGroupEvent(id, instance, e, eventMap)
 			case *events.PushName:
 				s.handlePushNameEvent(id, instance, e, eventMap)
 			case *events.Connected:
@@ -483,6 +486,98 @@ func (s *Whatsmiau) handleGroupInfoEvent(id string, instance *models.Instance, e
 	}
 
 	s.emit(wookData, instance.Webhook.Url)
+}
+
+func (s *Whatsmiau) emitGroupParticipantsUpdate(id string, instance *models.Instance, groupJID string, author string, participantJIDs []types.JID, timestamp time.Time) {
+	ctx := context.Background()
+
+	participants := make([]WookGroupParticipantJID, 0, len(participantJIDs))
+	participantsData := make([]WookGroupParticipantsDataItem, 0, len(participantJIDs))
+
+	for _, j := range participantJIDs {
+		jid, lid := s.GetJidLid(ctx, id, j)
+
+		p := WookGroupParticipantJID{
+			ID:          lid,
+			PhoneNumber: jid,
+			Admin:       nil,
+		}
+
+		participants = append(participants, p)
+		participantsData = append(participantsData, WookGroupParticipantsDataItem{
+			JID: p,
+		})
+	}
+
+	data := &WookGroupParticipantsUpdateData{
+		ID:               groupJID,
+		Author:           author,
+		Participants:     participants,
+		Action:           "add",
+		ParticipantsData: participantsData,
+	}
+
+	wookEvent := &WookEvent[WookGroupParticipantsUpdateData]{
+		Instance: instance.ID,
+		Data:     data,
+		DateTime: timestamp,
+		Sender:   instance.RemoteJID,
+		Event:    WookGroupParticipantsUpdate,
+	}
+
+	s.emit(wookEvent, instance.Webhook.Url)
+}
+
+func (s *Whatsmiau) handleGroupParticipantsUpdateEvent(id string, instance *models.Instance, e *events.GroupInfo, eventMap map[string]bool) {
+	if !eventMap["GROUP_PARTICIPANTS_UPDATE"] {
+		return
+	}
+
+	if instance.GroupsIgnore {
+		return
+	}
+
+	if len(e.Join) == 0 {
+		return
+	}
+
+	var author string
+	if e.Sender != nil {
+		_, author = s.GetJidLid(context.Background(), id, *e.Sender)
+	}
+
+	s.emitGroupParticipantsUpdate(id, instance, e.JID.ToNonAD().String(), author, e.Join, e.Timestamp)
+}
+
+func (s *Whatsmiau) handleJoinedGroupEvent(id string, instance *models.Instance, e *events.JoinedGroup, eventMap map[string]bool) {
+	if !eventMap["GROUP_PARTICIPANTS_UPDATE"] {
+		return
+	}
+
+	if instance.GroupsIgnore {
+		return
+	}
+
+	if instance.RemoteJID == "" {
+		return
+	}
+
+	instanceJID, err := types.ParseJID(instance.RemoteJID)
+	if err != nil {
+		zap.L().Warn("failed to parse instance RemoteJID for JoinedGroup event",
+			zap.String("instance", id),
+			zap.String("remoteJID", instance.RemoteJID),
+			zap.Error(err),
+		)
+		return
+	}
+
+	var author string
+	if e.Sender != nil {
+		_, author = s.GetJidLid(context.Background(), id, *e.Sender)
+	}
+
+	s.emitGroupParticipantsUpdate(id, instance, e.JID.ToNonAD().String(), author, []types.JID{instanceJID}, time.Now())
 }
 
 func (s *Whatsmiau) handlePushNameEvent(id string, instance *models.Instance, e *events.PushName, eventMap map[string]bool) {

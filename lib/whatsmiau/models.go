@@ -9,11 +9,12 @@ import (
 type Wook string
 
 const (
-	WookMessagesUpsert   Wook = "messages.upsert"
-	WookMessagesUpdate   Wook = "messages.update"
-	WookContactsUpsert   Wook = "contacts.upsert"
-	WookConnectionUpdate Wook = "connection.update"
-	WookMessagesDelete   Wook = "messages.delete"
+	WookMessagesUpsert           Wook = "messages.upsert"
+	WookMessagesUpdate           Wook = "messages.update"
+	WookContactsUpsert           Wook = "contacts.upsert"
+	WookConnectionUpdate         Wook = "connection.update"
+	WookMessagesDelete           Wook = "messages.delete"
+	WookGroupParticipantsUpdate  Wook = "group-participants.update"
 )
 
 type WookEvent[data any] struct {
@@ -292,4 +293,23 @@ type WookConnectionUpdateData struct {
 	ProfilePictureUrl string `json:"profilePictureUrl,omitempty"`
 	State             string `json:"state"`
 	StatusReason      int    `json:"statusReason,omitempty"`
+}
+
+type WookGroupParticipantsUpdateData struct {
+	ID               string                          `json:"id,omitempty"`
+	Author           string                          `json:"author,omitempty"`
+	Participants     []WookGroupParticipantJID       `json:"participants,omitempty"`
+	Action           string                          `json:"action,omitempty"`
+	ParticipantsData []WookGroupParticipantsDataItem `json:"participantsData,omitempty"`
+}
+
+type WookGroupParticipantJID struct {
+	ID          string `json:"id,omitempty"`
+	PhoneNumber string `json:"phoneNumber,omitempty"`
+	Admin       *bool  `json:"admin,omitempty"`
+}
+
+type WookGroupParticipantsDataItem struct {
+	JID         WookGroupParticipantJID `json:"jid,omitempty"`
+	PhoneNumber string                  `json:"phoneNumber,omitempty"`
 }

@@ -22,11 +22,12 @@ import (
 )
 
 var webhookEventOptions = map[whatsmiau.Wook]bool{
-	whatsmiau.WookMessagesUpsert:   true,
-	whatsmiau.WookMessagesUpdate:   true,
-	whatsmiau.WookContactsUpsert:   true,
-	whatsmiau.WookConnectionUpdate: true,
-	whatsmiau.WookMessagesDelete:   true,
+	whatsmiau.WookMessagesUpsert:           true,
+	whatsmiau.WookMessagesUpdate:           true,
+	whatsmiau.WookContactsUpsert:           true,
+	whatsmiau.WookConnectionUpdate:         true,
+	whatsmiau.WookMessagesDelete:           true,
+	whatsmiau.WookGroupParticipantsUpdate:  true,
 }
 
 type ManagerTemplates struct {
