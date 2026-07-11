@@ -591,7 +591,7 @@ func (s *Whatsmiau) handleJoinedGroupEvent(id string, instance *models.Instance,
 
 	var author string
 	if e.Sender != nil {
-		_, author = s.GetJidLid(context.Background(), id, *e.Sender)
+		_, author = s.GetJidLid(ctx, id, *e.Sender)
 	}
 
 	s.emitGroupParticipantsUpdate(id, instance, e.JID.ToNonAD().String(), author, []types.JID{instanceJID}, time.Now(), "add", nil)
