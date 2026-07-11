@@ -538,7 +538,8 @@ func (s *Whatsmiau) handleGroupParticipantsUpdateEvent(id string, instance *mode
 		return
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	groupJID := e.JID.ToNonAD().String()
 
 	var author string
