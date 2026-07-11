@@ -489,7 +489,8 @@ func (s *Whatsmiau) handleGroupInfoEvent(id string, instance *models.Instance, e
 }
 
 func (s *Whatsmiau) emitGroupParticipantsUpdate(id string, instance *models.Instance, groupJID string, author string, participantJIDs []types.JID, timestamp time.Time, action string, admin *bool) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	participants := make([]WookGroupParticipantJID, 0, len(participantJIDs))
 	participantsData := make([]WookGroupParticipantsDataItem, 0, len(participantJIDs))
