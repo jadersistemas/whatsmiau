@@ -629,7 +629,7 @@ func (s *Whatsmiau) emitGroupParticipantsUpdate(id string, instance *models.Inst
 }
 
 func (s *Whatsmiau) handleGroupParticipantsUpdateEvent(id string, instance *models.Instance, e *events.GroupInfo, eventMap map[string]bool) {
-	if !eventMap[string(WookGroupParticipantsUpdate)] {
+	if !eventMap["GROUP_PARTICIPANTS_UPDATE"] {
 		return
 	}
 
@@ -666,7 +666,7 @@ func (s *Whatsmiau) handleGroupParticipantsUpdateEvent(id string, instance *mode
 }
 
 func (s *Whatsmiau) handleJoinedGroupEvent(id string, instance *models.Instance, e *events.JoinedGroup, eventMap map[string]bool) {
-	if !eventMap[string(WookGroupParticipantsUpdate)] {
+	if !eventMap["GROUP_PARTICIPANTS_UPDATE"] {
 		return
 	}
 
