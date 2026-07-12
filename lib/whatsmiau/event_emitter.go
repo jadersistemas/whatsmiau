@@ -690,6 +690,8 @@ func (s *Whatsmiau) handleJoinedGroupEvent(id string, instance *models.Instance,
 
 	var author string
 	if e.Sender != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 		_, author = s.GetJidLid(ctx, id, *e.Sender)
 	}
 
