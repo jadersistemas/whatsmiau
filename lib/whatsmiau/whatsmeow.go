@@ -632,6 +632,10 @@ func (s *Whatsmiau) Restart(ctx context.Context, id string) error {
 	return nil
 }
 
+func (s *Whatsmiau) InvalidateInstanceCache(id string) {
+	s.instanceCache.Delete(id)
+}
+
 func (s *Whatsmiau) GetJidLid(ctx context.Context, id string, jid types.JID) (string, string) {
 	newJid, newLid := s.extractJidLid(ctx, id, jid)
 	if strings.HasSuffix(newJid, "@lid") {

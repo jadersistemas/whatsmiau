@@ -134,7 +134,8 @@ func (s *Instance) Update(ctx echo.Context) error {
 	}
 
 	c := ctx.Request().Context()
-	instance, err := s.repo.Update(c, request.ID, &models.Instance{
+
+	toUpdate := &models.Instance{
 		ID: request.ID,
 		Webhook: models.InstanceWebhook{
 			Enabled: request.Webhook.Enabled,
@@ -143,7 +144,12 @@ func (s *Instance) Update(ctx echo.Context) error {
 			Events:  request.Webhook.Events,
 		},
 		InstanceProxy: request.InstanceProxy,
-	})
+	}
+	if request.GroupsIgnore != nil {
+		toUpdate.GroupsIgnore = request.GroupsIgnore
+	}
+
+	instance, err := s.repo.Update(c, request.ID, toUpdate)
 	if err != nil {
 		if errors.Is(err, instances.ErrorNotFound) {
 			return utils.HTTPFail(ctx, http.StatusNotFound, err, "instance not found")
@@ -151,6 +157,9 @@ func (s *Instance) Update(ctx echo.Context) error {
 		zap.L().Error("failed to create instance", zap.Error(err))
 		return utils.HTTPFail(ctx, http.StatusInternalServerError, err, "failed to update instance")
 	}
+
+	// Invalidate in-memory cache so settings like GroupsIgnore take effect immediately
+	s.whatsmiau.InvalidateInstanceCache(request.ID)
 
 	return ctx.JSON(http.StatusCreated, dto.UpdateInstanceResponse{
 		Instance: instance,
