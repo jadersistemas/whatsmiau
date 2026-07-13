@@ -318,7 +318,7 @@ func canIgnoreMessage(msg *events.Message) bool {
 
 // canIgnoreGroup returns true if group can be ignored
 func canIgnoreGroup(evt interface{}, instance *models.Instance) bool {
-	if !instance.GroupsIgnore {
+	if instance.GroupsIgnore == nil || !*instance.GroupsIgnore {
 		return false
 	}
 

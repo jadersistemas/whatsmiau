@@ -567,7 +567,7 @@ func (s *Whatsmiau) handleGroupInfoEvent(id string, instance *models.Instance, e
 		return
 	}
 
-	if instance.GroupsIgnore {
+	if instance.GroupsIgnore != nil && *instance.GroupsIgnore {
 		return
 	}
 
@@ -633,7 +633,7 @@ func (s *Whatsmiau) handleGroupParticipantsUpdateEvent(id string, instance *mode
 		return
 	}
 
-	if instance.GroupsIgnore {
+	if instance.GroupsIgnore != nil && *instance.GroupsIgnore {
 		return
 	}
 
@@ -670,7 +670,7 @@ func (s *Whatsmiau) handleJoinedGroupEvent(id string, instance *models.Instance,
 		return
 	}
 
-	if instance.GroupsIgnore {
+	if instance.GroupsIgnore != nil && *instance.GroupsIgnore {
 		return
 	}
 

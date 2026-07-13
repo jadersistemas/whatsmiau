@@ -4,7 +4,7 @@ type Instance struct {
 	ID                string          `json:"id,omitempty"`
 	RejectCall        bool            `json:"rejectCall,omitempty"`
 	MsgCall           string          `json:"msgCall,omitempty"`
-	GroupsIgnore      bool            `json:"groupsIgnore,omitempty"`
+	GroupsIgnore      *bool           `json:"groupsIgnore,omitempty"`
 	AlwaysOnline      bool            `json:"alwaysOnline,omitempty"`
 	ReadMessages      bool            `json:"readMessages,omitempty"`
 	ReadStatus        bool            `json:"readStatus,omitempty"`

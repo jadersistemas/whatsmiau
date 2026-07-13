@@ -41,8 +41,9 @@ type MigrationResult struct {
 }
 
 type UpdateInstanceRequest struct {
-	ID      string `json:"id,omitempty" param:"id" validate:"required" swaggerignore:"true"`
-	Webhook struct {
+	ID           string `json:"id,omitempty" param:"id" validate:"required" swaggerignore:"true"`
+	GroupsIgnore *bool  `json:"groupsIgnore,omitempty"`
+	Webhook      struct {
 		Enabled *bool    `json:"enabled,omitempty"`
 		Base64  bool     `json:"base64,omitempty"`
 		URL     string   `json:"url,omitempty"`
