@@ -9,11 +9,13 @@ import (
 type Wook string
 
 const (
-	WookMessagesUpsert   Wook = "messages.upsert"
-	WookMessagesUpdate   Wook = "messages.update"
-	WookContactsUpsert   Wook = "contacts.upsert"
-	WookConnectionUpdate Wook = "connection.update"
-	WookMessagesDelete   Wook = "messages.delete"
+	WookMessagesUpsert          Wook = "messages.upsert"
+	WookMessagesUpdate          Wook = "messages.update"
+	WookContactsUpsert          Wook = "contacts.upsert"
+	WookConnectionUpdate        Wook = "connection.update"
+	WookMessagesDelete          Wook = "messages.delete"
+	WookMessagesSet             Wook = "messages.set"
+	WookGroupParticipantsUpdate Wook = "group-participants.update"
 )
 
 type WookEvent[data any] struct {
@@ -25,6 +27,8 @@ type WookEvent[data any] struct {
 	ServerUrl   string    `json:"server_url,omitempty"`
 	Apikey      string    `json:"apikey,omitempty"`
 	Event       Wook      `json:"event,omitempty"`
+	IsLatest    *bool     `json:"isLatest,omitempty"`
+	Progress    *int      `json:"progress,omitempty"`
 }
 
 type WookMessageData struct {
@@ -37,6 +41,7 @@ type WookMessageData struct {
 	MessageTimestamp int                     `json:"messageTimestamp,omitempty"`
 	InstanceId       string                  `json:"instanceId,omitempty"`
 	Source           string                  `json:"source,omitempty"`
+	PollUpdates      []WookPollUpdate        `json:"pollUpdates,omitempty"`
 }
 
 type WookMessageContextInfo struct {
@@ -83,11 +88,12 @@ type WookMessageExtendedTextMessageContextInfo struct {
 }
 
 type WookKey struct {
-	RemoteJid   string `json:"remoteJid,omitempty"`
-	RemoteLid   string `json:"remoteLid,omitempty"`
-	FromMe      bool   `json:"fromMe,omitempty"`
-	Id          string `json:"id,omitempty"`
-	Participant string `json:"participant,omitempty"`
+	RemoteJid      string `json:"remoteJid,omitempty"`
+	RemoteLid      string `json:"remoteLid,omitempty"`
+	FromMe         bool   `json:"fromMe,omitempty"`
+	Id             string `json:"id,omitempty"`
+	Participant    string `json:"participant,omitempty"`
+	AddressingMode string `json:"addressingMode,omitempty"`
 }
 
 type WookMessageRaw struct {
@@ -109,6 +115,7 @@ type WookMessageRaw struct {
 	PollCreationMessage *WookPollCreationMessageRaw `json:"pollCreationMessage,omitempty"`
 	PollUpdateMessage   *WookPollUpdateMessageRaw   `json:"pollUpdateMessage,omitempty"`
 	PtvMessage          *WookPtvMessageRaw          `json:"ptvMessage,omitempty"`
+	EncCommentMessage   *WookEncCommentMessageRaw   `json:"encCommentMessage,omitempty"`
 	MediaURL            string                      `json:"mediaUrl,omitempty"` // Sent when connect with some storage
 }
 
@@ -172,6 +179,12 @@ type ReactionMessageRaw struct {
 	Key               *WookKey `json:"key,omitempty"`
 	Text              string   `json:"text,omitempty"`
 	SenderTimestampMs string   `json:"senderTimestampMs,omitempty"`
+}
+
+type WookEncCommentMessageRaw struct {
+	TargetMessageKey *WookKey `json:"targetMessageKey,omitempty"`
+	EncPayload       string   `json:"encPayload,omitempty"`
+	EncIv            string   `json:"encIv,omitempty"`
 }
 
 type WookAudioMessageRaw struct {
@@ -292,4 +305,23 @@ type WookConnectionUpdateData struct {
 	ProfilePictureUrl string `json:"profilePictureUrl,omitempty"`
 	State             string `json:"state"`
 	StatusReason      int    `json:"statusReason,omitempty"`
+}
+
+type WookGroupParticipantsUpdateData struct {
+	ID               string                          `json:"id,omitempty"`
+	Author           string                          `json:"author,omitempty"`
+	Participants     []WookGroupParticipantJID       `json:"participants,omitempty"`
+	Action           string                          `json:"action,omitempty"`
+	ParticipantsData []WookGroupParticipantsDataItem `json:"participantsData,omitempty"`
+}
+
+type WookGroupParticipantJID struct {
+	ID          string `json:"id,omitempty"`
+	PhoneNumber string `json:"phoneNumber,omitempty"`
+	Admin       *bool  `json:"admin,omitempty"`
+}
+
+type WookGroupParticipantsDataItem struct {
+	JID         WookGroupParticipantJID `json:"jid,omitempty"`
+	PhoneNumber string                  `json:"phoneNumber,omitempty"`
 }

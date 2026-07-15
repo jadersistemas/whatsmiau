@@ -2,6 +2,7 @@ package whatsmiau
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -13,9 +14,11 @@ import (
 	"time"
 
 	"github.com/emersion/go-vcard"
+	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	"github.com/verbeux-ai/whatsmiau/env"
 	"github.com/verbeux-ai/whatsmiau/models"
+	"github.com/verbeux-ai/whatsmiau/services"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/proto/waHistorySync"
@@ -188,7 +191,16 @@ func (s *Whatsmiau) Handle(id string) whatsmeow.EventHandler {
 	return func(evt any) {
 		s.handlerSemaphore <- struct{}{}
 		go func() {
-			defer func() { <-s.handlerSemaphore }()
+			defer func() {
+				if r := recover(); r != nil {
+					zap.L().Error("panic in event handler",
+						zap.String("instance", id),
+						zap.Any("panic", r),
+						zap.Stack("stack"),
+					)
+				}
+				<-s.handlerSemaphore
+			}()
 			instance := s.getInstanceCached(id)
 			if instance == nil {
 				zap.L().Warn("no instance found for event", zap.String("instance", id))
@@ -225,14 +237,21 @@ func (s *Whatsmiau) Handle(id string) whatsmeow.EventHandler {
 				s.handleHistorySyncEvent(id, instance, e, eventMap)
 			case *events.GroupInfo:
 				s.handleGroupInfoEvent(id, instance, e, eventMap)
+				s.handleGroupParticipantsUpdateEvent(id, instance, e, eventMap)
+			case *events.JoinedGroup:
+				s.handleJoinedGroupEvent(id, instance, e, eventMap)
 			case *events.PushName:
 				s.handlePushNameEvent(id, instance, e, eventMap)
 			case *events.Connected:
 				s.handleConnectionUpdateEvent(id, instance, "open", 200, eventMap)
 			case *events.Disconnected:
 				s.handleConnectionUpdateEvent(id, instance, "close", 0, eventMap)
+				s.stopHistorySyncWatchdog(id)
 			case *events.ConnectFailure:
 				s.handleConnectionUpdateEvent(id, instance, "close", int(e.Reason), eventMap)
+				s.stopHistorySyncWatchdog(id)
+			case *events.StreamReplaced:
+				s.stopHistorySyncWatchdog(id)
 			default:
 				zap.L().Debug("unknown event", zap.String("type", fmt.Sprintf("%T", evt)), zap.Any("raw", evt))
 			}
@@ -241,6 +260,8 @@ func (s *Whatsmiau) Handle(id string) whatsmeow.EventHandler {
 }
 
 func (s *Whatsmiau) handleLoggedOut(id string) {
+	s.stopHistorySyncWatchdog(id)
+
 	client, ok := s.clients.Load(id)
 	if ok {
 		if err := s.deleteDeviceIfExists(context.Background(), client); err != nil {
@@ -440,7 +461,60 @@ func (s *Whatsmiau) handlePictureEvent(id string, instance *models.Instance, e *
 	s.emit(wookData, instance.Webhook.Url)
 }
 
+var (
+	historySyncWatchdog sync.Map
+	historySyncProgress sync.Map
+)
+
+const historySyncTimeout = 180 * time.Second
+
 func (s *Whatsmiau) handleHistorySyncEvent(id string, instance *models.Instance, e *events.HistorySync, eventMap map[string]bool) {
+	if e == nil || e.Data == nil {
+		return
+	}
+
+	progress := e.Data.GetProgress()
+	isLatest := progress >= 100
+
+	if instance.SyncFullHistory && eventMap["MESSAGES_SET"] {
+		var messages []WookMessageData
+		for _, conv := range e.Data.Conversations {
+			for _, msg := range conv.GetMessages() {
+				if msg.Message == nil || msg.Message.Message == nil {
+					continue
+				}
+
+				messageData := s.buildMessageDataFromHistory(msg.Message, conv.GetName(), conv.GetDisplayName())
+				if messageData == nil {
+					continue
+				}
+
+				messageData.InstanceId = instance.ID
+				messages = append(messages, *messageData)
+			}
+		}
+
+		if len(messages) > 0 {
+			prog := int(progress)
+			wookEvent := &WookEvent[[]WookMessageData]{
+				Instance: instance.ID,
+				Data:     &messages,
+				DateTime: time.Now(),
+				Event:    WookMessagesSet,
+				IsLatest: &isLatest,
+				Progress: &prog,
+			}
+			s.emit(wookEvent, instance.Webhook.Url)
+		}
+
+		if isLatest {
+			s.stopHistorySyncWatchdog(id)
+		} else {
+			historySyncProgress.Store(id, progress)
+			s.resetHistorySyncWatchdog(id)
+		}
+	}
+
 	if !eventMap["CONTACTS_UPSERT"] {
 		return
 	}
@@ -460,12 +534,40 @@ func (s *Whatsmiau) handleHistorySyncEvent(id string, instance *models.Instance,
 	s.emit(wookData, instance.Webhook.Url)
 }
 
+func cleanHistorySyncState(id string) {
+	historySyncWatchdog.Delete(id)
+	historySyncProgress.Delete(id)
+}
+
+func (s *Whatsmiau) resetHistorySyncWatchdog(id string) {
+	if existing, ok := historySyncWatchdog.Load(id); ok {
+		existing.(*time.Timer).Reset(historySyncTimeout)
+		return
+	}
+
+	newTimer := time.AfterFunc(historySyncTimeout, func() {
+		cleanHistorySyncState(id)
+	})
+	actual, loaded := historySyncWatchdog.LoadOrStore(id, newTimer)
+	if loaded {
+		newTimer.Stop()
+		actual.(*time.Timer).Reset(historySyncTimeout)
+	}
+}
+
+func (s *Whatsmiau) stopHistorySyncWatchdog(id string) {
+	if watchdog, ok := historySyncWatchdog.Load(id); ok {
+		watchdog.(*time.Timer).Stop()
+	}
+	cleanHistorySyncState(id)
+}
+
 func (s *Whatsmiau) handleGroupInfoEvent(id string, instance *models.Instance, e *events.GroupInfo, eventMap map[string]bool) {
 	if !eventMap["CONTACTS_UPSERT"] {
 		return
 	}
 
-	if instance.GroupsIgnore {
+	if instance.GroupsIgnore != nil && *instance.GroupsIgnore {
 		return
 	}
 
@@ -483,6 +585,118 @@ func (s *Whatsmiau) handleGroupInfoEvent(id string, instance *models.Instance, e
 	}
 
 	s.emit(wookData, instance.Webhook.Url)
+}
+
+func (s *Whatsmiau) emitGroupParticipantsUpdate(id string, instance *models.Instance, groupJID string, author string, participantJIDs []types.JID, timestamp time.Time, action string, admin *bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	participants := make([]WookGroupParticipantJID, 0, len(participantJIDs))
+	participantsData := make([]WookGroupParticipantsDataItem, 0, len(participantJIDs))
+
+	for _, j := range participantJIDs {
+		jid, lid := s.GetJidLid(ctx, id, j)
+
+		p := WookGroupParticipantJID{
+			ID:          lid,
+			PhoneNumber: jid,
+			Admin:       admin,
+		}
+
+		participants = append(participants, p)
+		participantsData = append(participantsData, WookGroupParticipantsDataItem{
+			JID: p,
+		})
+	}
+
+	data := &WookGroupParticipantsUpdateData{
+		ID:               groupJID,
+		Author:           author,
+		Participants:     participants,
+		Action:           action,
+		ParticipantsData: participantsData,
+	}
+
+	wookEvent := &WookEvent[WookGroupParticipantsUpdateData]{
+		Instance: instance.ID,
+		Data:     data,
+		DateTime: timestamp,
+		Sender:   instance.RemoteJID,
+		Event:    WookGroupParticipantsUpdate,
+	}
+
+	s.emit(wookEvent, instance.Webhook.Url)
+}
+
+func (s *Whatsmiau) handleGroupParticipantsUpdateEvent(id string, instance *models.Instance, e *events.GroupInfo, eventMap map[string]bool) {
+	if !eventMap["GROUP_PARTICIPANTS_UPDATE"] {
+		return
+	}
+
+	if instance.GroupsIgnore != nil && *instance.GroupsIgnore {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	groupJID := e.JID.ToNonAD().String()
+
+	var author string
+	if e.Sender != nil {
+		_, author = s.GetJidLid(ctx, id, *e.Sender)
+	}
+
+	if len(e.Join) > 0 {
+		s.emitGroupParticipantsUpdate(id, instance, groupJID, author, e.Join, e.Timestamp, "add", nil)
+	}
+
+	if len(e.Leave) > 0 {
+		s.emitGroupParticipantsUpdate(id, instance, groupJID, author, e.Leave, e.Timestamp, "remove", nil)
+	}
+
+	if len(e.Promote) > 0 {
+		admin := true
+		s.emitGroupParticipantsUpdate(id, instance, groupJID, author, e.Promote, e.Timestamp, "promote", &admin)
+	}
+
+	if len(e.Demote) > 0 {
+		admin := false
+		s.emitGroupParticipantsUpdate(id, instance, groupJID, author, e.Demote, e.Timestamp, "demote", &admin)
+	}
+}
+
+func (s *Whatsmiau) handleJoinedGroupEvent(id string, instance *models.Instance, e *events.JoinedGroup, eventMap map[string]bool) {
+	if !eventMap["GROUP_PARTICIPANTS_UPDATE"] {
+		return
+	}
+
+	if instance.GroupsIgnore != nil && *instance.GroupsIgnore {
+		return
+	}
+
+	if instance.RemoteJID == "" {
+		return
+	}
+
+	instanceJID, err := types.ParseJID(instance.RemoteJID)
+	if err != nil {
+		zap.L().Warn("failed to parse instance RemoteJID for JoinedGroup event",
+			zap.String("instance", id),
+			zap.String("remoteJID", instance.RemoteJID),
+			zap.Error(err),
+		)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var author string
+	if e.Sender != nil {
+		_, author = s.GetJidLid(ctx, id, *e.Sender)
+	}
+
+	s.emitGroupParticipantsUpdate(id, instance, e.JID.ToNonAD().String(), author, []types.JID{instanceJID}, time.Now(), "add", nil)
 }
 
 func (s *Whatsmiau) handlePushNameEvent(id string, instance *models.Instance, e *events.PushName, eventMap map[string]bool) {
@@ -749,6 +963,24 @@ func (s *Whatsmiau) parseWAMessage(m *waE2E.Message) (string, *WookMessageRaw, *
 			Options:                options,
 			SelectableOptionsCount: poll.GetSelectableOptionsCount(),
 		}
+	} else if poll := m.GetPollCreationMessageV3(); poll != nil {
+		messageType = "pollCreationMessageV3"
+
+		ci = poll.GetContextInfo()
+
+		options := make([]WookPollOption, 0, len(poll.GetOptions()))
+		for _, opt := range poll.GetOptions() {
+			options = append(options, WookPollOption{
+				OptionName: opt.GetOptionName(),
+			})
+		}
+
+		raw.PollCreationMessage = &WookPollCreationMessageRaw{
+			Name:                   poll.GetName(),
+			Options:                options,
+			SelectableOptionsCount: poll.GetSelectableOptionsCount(),
+		}
+
 	} else if pollUp := m.GetPollUpdateMessage(); pollUp != nil {
 		messageType = "pollUpdateMessage"
 		updKey := &WookKey{}
@@ -761,8 +993,10 @@ func (s *Whatsmiau) parseWAMessage(m *waE2E.Message) (string, *WookMessageRaw, *
 		raw.PollUpdateMessage = &WookPollUpdateMessageRaw{
 			PollCreationMessageKey: updKey,
 			SenderTimestampMs:      i64(pollUp.GetSenderTimestampMS()),
-			EncPayload:             b64(pollUp.GetVote().GetEncPayload()),
-			EncIv:                  b64(pollUp.GetVote().GetEncIV()),
+			Vote: &WookPollVote{
+				EncPayload: b64(pollUp.GetVote().GetEncPayload()),
+				EncIv:      b64(pollUp.GetVote().GetEncIV()),
+			},
 		}
 	} else if ptv := m.GetPtvMessage(); ptv != nil {
 		messageType = "ptvMessage"
@@ -785,6 +1019,20 @@ func (s *Whatsmiau) parseWAMessage(m *waE2E.Message) (string, *WookMessageRaw, *
 		messageType = "conversation"
 		raw.Conversation = et.GetText()
 		ci = et.GetContextInfo()
+	} else if ec := m.GetEncCommentMessage(); ec != nil {
+		messageType = "encCommentMessage"
+		raw.EncCommentMessage = &WookEncCommentMessageRaw{
+			EncPayload: b64(ec.GetEncPayload()),
+			EncIv:      b64(ec.GetEncIV()),
+		}
+		if targetKey := ec.GetTargetMessageKey(); targetKey != nil {
+			raw.EncCommentMessage.TargetMessageKey = &WookKey{
+				RemoteJid:   targetKey.GetRemoteJID(),
+				FromMe:      targetKey.GetFromMe(),
+				Id:          targetKey.GetID(),
+				Participant: targetKey.GetParticipant(),
+			}
+		}
 	} else {
 		messageType = "unknown"
 	}
@@ -899,12 +1147,17 @@ func (s *Whatsmiau) convertEventMessage(id string, instance *models.Instance, ev
 	m := e.Message
 
 	// Build the key
+	addressingMode := "lid"
+	if lid == "" {
+		addressingMode = "jid"
+	}
 	key := &WookKey{
-		RemoteJid:   jid,
-		RemoteLid:   lid,
-		FromMe:      e.Info.IsFromMe,
-		Id:          e.Info.ID,
-		Participant: senderJid,
+		RemoteJid:      jid,
+		RemoteLid:      lid,
+		FromMe:         e.Info.IsFromMe,
+		Id:             e.Info.ID,
+		Participant:    senderJid,
+		AddressingMode: addressingMode,
 	}
 
 	// Determine status
@@ -921,6 +1174,31 @@ func (s *Whatsmiau) convertEventMessage(id string, instance *models.Instance, ev
 
 	// Convert the WA protobuf message into our internal raw structure
 	messageType, raw, ci := s.parseWAMessage(m)
+
+	// Store poll creation options in Redis for later vote decryption
+	if raw.PollCreationMessage != nil {
+		chatJid := e.Info.Chat.ToNonAD().String()
+		cacheKey := "poll:cache:" + chatJid + ":" + e.Info.ID
+		entry := PollCreationEntry{
+			Options:   make([]PollOptionHash, len(raw.PollCreationMessage.Options)),
+			CreatedAt: time.Now(),
+		}
+		for i, opt := range raw.PollCreationMessage.Options {
+			hash := sha256.Sum256([]byte(opt.OptionName))
+			entry.Options[i] = PollOptionHash{Name: opt.OptionName, Hash: hash}
+		}
+		if data, err := json.Marshal(entry); err == nil {
+			if err := services.Redis().Set(context.Background(), cacheKey, data, 7*24*time.Hour).Err(); err != nil {
+				zap.L().Error("failed to store poll creation in redis",
+					zap.Error(err),
+					zap.String("cache_key", cacheKey))
+			}
+		} else {
+			zap.L().Error("failed to marshal poll creation entry",
+				zap.Error(err),
+				zap.String("cache_key", cacheKey))
+		}
+	}
 
 	// Upload media (URL / Base64) when needed
 	switch messageType {
@@ -998,6 +1276,58 @@ func (s *Whatsmiau) convertEventMessage(id string, instance *models.Instance, ev
 		}
 	}
 
+	// Decrypt poll vote and build pollUpdates
+	var pollUpdates []WookPollUpdate
+	if raw.PollUpdateMessage != nil && raw.PollUpdateMessage.PollCreationMessageKey != nil {
+		chatJid := e.Info.Chat.ToNonAD().String()
+		origMsgID := raw.PollUpdateMessage.PollCreationMessageKey.Id
+		cacheKey := "poll:cache:" + chatJid + ":" + origMsgID
+
+		if decrypted, err := client.DecryptPollVote(ctx, evt); err == nil && decrypted != nil {
+			selectedHashes := decrypted.GetSelectedOptions()
+
+			data, err := services.Redis().Get(context.Background(), cacheKey).Bytes()
+			if err == nil {
+				var entry PollCreationEntry
+				if err := json.Unmarshal(data, &entry); err == nil {
+					for _, selectedHash := range selectedHashes {
+						for _, opt := range entry.Options {
+							if bytes.Equal(selectedHash, opt.Hash[:]) {
+								raw.PollUpdateMessage.Vote.SelectedOptions = append(
+									raw.PollUpdateMessage.Vote.SelectedOptions,
+									opt.Name,
+								)
+								pollUpdates = append(pollUpdates, WookPollUpdate{
+									Name:   opt.Name,
+									Voters: []string{senderJid},
+								})
+								break
+							}
+						}
+					}
+				} else {
+					zap.L().Error("failed to unmarshal poll creation entry",
+						zap.Error(err),
+						zap.String("cache_key", cacheKey),
+						zap.String("instance_id", id))
+				}
+			} else if err == redis.Nil {
+				zap.L().Warn("poll creation entry not found in redis",
+					zap.String("cache_key", cacheKey),
+					zap.String("instance_id", id))
+			} else {
+				zap.L().Error("failed to get poll creation from redis",
+					zap.Error(err),
+					zap.String("cache_key", cacheKey),
+					zap.String("instance_id", id))
+			}
+		} else if err != nil {
+			zap.L().Error("failed to decrypt poll vote",
+				zap.Error(err),
+				zap.String("instance_id", id))
+		}
+	}
+
 	return &WookMessageData{
 		Key:              key,
 		PushName:         strings.TrimSpace(e.Info.PushName),
@@ -1008,6 +1338,7 @@ func (s *Whatsmiau) convertEventMessage(id string, instance *models.Instance, ev
 		MessageTimestamp: int(ts.Unix()),
 		InstanceId:       id,
 		Source:           "whatsapp",
+		PollUpdates:      pollUpdates,
 	}
 }
 
@@ -1291,6 +1622,11 @@ func (s *Whatsmiau) getPic(id string, jid types.JID) (string, string, error) {
 	if !ok || client == nil {
 		zap.L().Warn("no client for event", zap.String("id", id))
 		return "", "", fmt.Errorf("no client for event %s", id)
+	}
+
+	if !client.IsConnected() {
+		zap.L().Warn("client not connected, skipping getPic", zap.String("id", id))
+		return "", "", fmt.Errorf("client not connected for %s", id)
 	}
 
 	pic, err := client.GetProfilePictureInfo(context.TODO(), jid, &whatsmeow.GetProfilePictureParams{
