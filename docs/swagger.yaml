@@ -44,7 +44,6 @@ definitions:
       participants:
         items:
           type: string
-        minItems: 1
         type: array
     required:
     - action
@@ -117,7 +116,6 @@ definitions:
       participants:
         items:
           type: string
-        minItems: 1
         type: array
       subject:
         maxLength: 25
@@ -135,7 +133,6 @@ definitions:
       participants:
         items:
           type: string
-        minItems: 1
         type: array
       promoteParticipants:
         type: boolean
@@ -148,43 +145,6 @@ definitions:
     - subject
     type: object
   dto.CreateInstanceRequest:
-    properties:
-      alwaysOnline:
-        type: boolean
-      groupsIgnore:
-        type: boolean
-      id:
-        type: string
-      instanceName:
-        type: string
-      migration:
-        $ref: '#/definitions/dto.MigrationData'
-      msgCall:
-        type: string
-      proxyHost:
-        type: string
-      proxyPassword:
-        type: string
-      proxyPort:
-        type: string
-      proxyProtocol:
-        type: string
-      proxyUsername:
-        type: string
-      readMessages:
-        type: boolean
-      readStatus:
-        type: boolean
-      rejectCall:
-        type: boolean
-      remoteJID:
-        type: string
-      syncFullHistory:
-        type: boolean
-      syncRecentHistory:
-        type: boolean
-      webhook:
-        $ref: '#/definitions/models.InstanceWebhook'
     type: object
   dto.CreateInstanceResponse:
     properties:
@@ -252,6 +212,19 @@ definitions:
         type: string
       senderTimestamp:
         type: string
+    type: object
+  dto.EditMessageRequest:
+    properties:
+      id:
+        type: string
+      newMessage:
+        type: string
+      remoteJid:
+        type: string
+    required:
+    - id
+    - newMessage
+    - remoteJid
     type: object
   dto.GroupDescriptionRequest:
     properties:
@@ -422,33 +395,6 @@ definitions:
       remoteJid:
         type: string
     type: object
-  dto.MigrationBuffer:
-    properties:
-      data:
-        type: string
-      type:
-        type: string
-    type: object
-  dto.MigrationData:
-    properties:
-      creds:
-        items:
-          type: integer
-        type: array
-      preKeys:
-        items:
-          $ref: '#/definitions/dto.MigrationPreKey'
-        type: array
-    required:
-    - creds
-    type: object
-  dto.MigrationPreKey:
-    properties:
-      keyId:
-        type: integer
-      private:
-        $ref: '#/definitions/dto.MigrationBuffer'
-    type: object
   dto.MigrationResult:
     properties:
       connected:
@@ -502,6 +448,37 @@ definitions:
     required:
     - id
     - remoteJid
+    type: object
+  dto.ReplyMessageRequest:
+    properties:
+      messageId:
+        type: string
+      participant:
+        type: string
+      remoteJid:
+        type: string
+      text:
+        type: string
+    required:
+    - messageId
+    - remoteJid
+    - text
+    type: object
+  dto.RestartInstanceEvoCompatibility:
+    properties:
+      instanceName:
+        type: string
+      status:
+        type: string
+    type: object
+  dto.RestartInstanceResponse:
+    properties:
+      id:
+        type: string
+      instance:
+        $ref: '#/definitions/dto.RestartInstanceEvoCompatibility'
+      state:
+        type: string
     type: object
   dto.RootResponse:
     properties:
@@ -1203,6 +1180,8 @@ definitions:
     type: object
   dto.UpdateInstanceRequest:
     properties:
+      groupsIgnore:
+        type: boolean
       proxyHost:
         type: string
       proxyPassword:
@@ -1399,6 +1378,13 @@ definitions:
       success:
         type: boolean
     type: object
+  whatsmiau.SendTextResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+    type: object
   whatsmiau.SetGroupPictureResponse:
     properties:
       pictureId:
@@ -1493,6 +1479,48 @@ paths:
       summary: Delete message for everyone
       tags:
       - Chat
+  /chat/editMessage/{instance}:
+    put:
+      consumes:
+      - application/json
+      description: Edits a previously sent message with new text content.
+      parameters:
+      - description: Instance ID
+        in: path
+        name: instance
+        required: true
+        type: string
+      - description: Message to edit
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.EditMessageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Empty object on success
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Edit a sent message
+      tags:
+      - Chat
   /chat/markMessageAsRead/{instance}:
     post:
       consumes:
@@ -1533,6 +1561,47 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Mark messages as read
+      tags:
+      - Chat
+  /chat/reply/{instance}:
+    post:
+      consumes:
+      - application/json
+      description: Sends a text reply to a specific message in a chat.
+      parameters:
+      - description: Instance ID
+        in: path
+        name: instance
+        required: true
+        type: string
+      - description: Reply parameters
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ReplyMessageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Reply sent successfully
+          schema:
+            $ref: '#/definitions/whatsmiau.SendTextResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Reply to a message
       tags:
       - Chat
   /chat/sendPresence/{instance}:
@@ -2233,6 +2302,44 @@ paths:
       summary: Logout an instance
       tags:
       - Instance
+  /instance/{id}/restart:
+    post:
+      description: Disconnects and reconnects the WhatsApp websocket without logging
+        out
+      parameters:
+      - description: Instance ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.RestartInstanceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Restart an instance connection
+      tags:
+      - Instance
   /instance/{id}/status:
     get:
       description: Returns the current connection state of the specified instance
@@ -2306,6 +2413,48 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Delete message for everyone
+      tags:
+      - Chat
+  /instance/{instance}/chat/editMessage:
+    put:
+      consumes:
+      - application/json
+      description: Edits a previously sent message with new text content.
+      parameters:
+      - description: Instance ID
+        in: path
+        name: instance
+        required: true
+        type: string
+      - description: Message to edit
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.EditMessageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Empty object on success
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Edit a sent message
       tags:
       - Chat
   /instance/{instance}/chat/presence:
@@ -2391,6 +2540,47 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Mark messages as read
+      tags:
+      - Chat
+  /instance/{instance}/chat/reply:
+    post:
+      consumes:
+      - application/json
+      description: Sends a text reply to a specific message in a chat.
+      parameters:
+      - description: Instance ID
+        in: path
+        name: instance
+        required: true
+        type: string
+      - description: Reply parameters
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ReplyMessageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Reply sent successfully
+          schema:
+            $ref: '#/definitions/whatsmiau.SendTextResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Reply to a message
       tags:
       - Chat
   /instance/{instance}/community/create:
@@ -3630,6 +3820,44 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Logout an instance
+      tags:
+      - Instance
+  /instance/restart/{id}:
+    post:
+      description: Disconnects and reconnects the WhatsApp websocket without logging
+        out
+      parameters:
+      - description: Instance ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.RestartInstanceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.HTTPErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Restart an instance connection
       tags:
       - Instance
   /instance/update/{id}:

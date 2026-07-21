@@ -112,6 +112,71 @@ const docTemplate = `{
                 }
             }
         },
+        "/chat/editMessage/{instance}": {
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Edits a previously sent message with new text content.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Chat"
+                ],
+                "summary": "Edit a sent message",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Instance ID",
+                        "name": "instance",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Message to edit",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.EditMessageRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Empty object on success",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/chat/markMessageAsRead/{instance}": {
             "post": {
                 "security": [
@@ -154,6 +219,70 @@ const docTemplate = `{
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/reply/{instance}": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Sends a text reply to a specific message in a chat.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Chat"
+                ],
+                "summary": "Reply to a message",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Instance ID",
+                        "name": "instance",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Reply parameters",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ReplyMessageRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Reply sent successfully",
+                        "schema": {
+                            "$ref": "#/definitions/whatsmiau.SendTextResponse"
                         }
                     },
                     "400": {
@@ -1496,6 +1625,64 @@ const docTemplate = `{
                 }
             }
         },
+        "/instance/restart/{id}": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Disconnects and reconnects the WhatsApp websocket without logging out",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Instance"
+                ],
+                "summary": "Restart an instance connection",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Instance ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.RestartInstanceResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/instance/update/{id}": {
             "put": {
                 "security": [
@@ -1716,6 +1903,64 @@ const docTemplate = `{
                 }
             }
         },
+        "/instance/{id}/restart": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Disconnects and reconnects the WhatsApp websocket without logging out",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Instance"
+                ],
+                "summary": "Restart an instance connection",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Instance ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.RestartInstanceResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/instance/{id}/status": {
             "get": {
                 "security": [
@@ -1801,6 +2046,71 @@ const docTemplate = `{
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/dto.DeleteMessageForEveryoneRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Empty object on success",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/instance/{instance}/chat/editMessage": {
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Edits a previously sent message with new text content.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Chat"
+                ],
+                "summary": "Edit a sent message",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Instance ID",
+                        "name": "instance",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Message to edit",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.EditMessageRequest"
                         }
                     }
                 ],
@@ -1940,6 +2250,70 @@ const docTemplate = `{
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.HTTPErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/instance/{instance}/chat/reply": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Sends a text reply to a specific message in a chat.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Chat"
+                ],
+                "summary": "Reply to a message",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Instance ID",
+                        "name": "instance",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Reply parameters",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ReplyMessageRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Reply sent successfully",
+                        "schema": {
+                            "$ref": "#/definitions/whatsmiau.SendTextResponse"
                         }
                     },
                     "400": {
@@ -4281,7 +4655,6 @@ const docTemplate = `{
                 },
                 "participants": {
                     "type": "array",
-                    "minItems": 1,
                     "items": {
                         "type": "string"
                     }
@@ -4390,7 +4763,6 @@ const docTemplate = `{
                 },
                 "participants": {
                     "type": "array",
-                    "minItems": 1,
                     "items": {
                         "type": "string"
                     }
@@ -4414,7 +4786,6 @@ const docTemplate = `{
                 },
                 "participants": {
                     "type": "array",
-                    "minItems": 1,
                     "items": {
                         "type": "string"
                     }
@@ -4430,63 +4801,7 @@ const docTemplate = `{
             }
         },
         "dto.CreateInstanceRequest": {
-            "type": "object",
-            "properties": {
-                "alwaysOnline": {
-                    "type": "boolean"
-                },
-                "groupsIgnore": {
-                    "type": "boolean"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "instanceName": {
-                    "type": "string"
-                },
-                "migration": {
-                    "$ref": "#/definitions/dto.MigrationData"
-                },
-                "msgCall": {
-                    "type": "string"
-                },
-                "proxyHost": {
-                    "type": "string"
-                },
-                "proxyPassword": {
-                    "type": "string"
-                },
-                "proxyPort": {
-                    "type": "string"
-                },
-                "proxyProtocol": {
-                    "type": "string"
-                },
-                "proxyUsername": {
-                    "type": "string"
-                },
-                "readMessages": {
-                    "type": "boolean"
-                },
-                "readStatus": {
-                    "type": "boolean"
-                },
-                "rejectCall": {
-                    "type": "boolean"
-                },
-                "remoteJID": {
-                    "type": "string"
-                },
-                "syncFullHistory": {
-                    "type": "boolean"
-                },
-                "syncRecentHistory": {
-                    "type": "boolean"
-                },
-                "webhook": {
-                    "$ref": "#/definitions/models.InstanceWebhook"
-                }
-            }
+            "type": "object"
         },
         "dto.CreateInstanceResponse": {
             "type": "object",
@@ -4586,6 +4901,25 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "senderTimestamp": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.EditMessageRequest": {
+            "type": "object",
+            "required": [
+                "id",
+                "newMessage",
+                "remoteJid"
+            ],
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "newMessage": {
+                    "type": "string"
+                },
+                "remoteJid": {
                     "type": "string"
                 }
             }
@@ -4838,48 +5172,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.MigrationBuffer": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
-        "dto.MigrationData": {
-            "type": "object",
-            "required": [
-                "creds"
-            ],
-            "properties": {
-                "creds": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "preKeys": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.MigrationPreKey"
-                    }
-                }
-            }
-        },
-        "dto.MigrationPreKey": {
-            "type": "object",
-            "properties": {
-                "keyId": {
-                    "type": "integer"
-                },
-                "private": {
-                    "$ref": "#/definitions/dto.MigrationBuffer"
-                }
-            }
-        },
         "dto.MigrationResult": {
             "type": "object",
             "properties": {
@@ -4958,6 +5250,53 @@ const docTemplate = `{
                 },
                 "sender": {
                     "description": "FromMe    bool   ` + "`" + `json:\"fromMe\"` + "`" + ` ignored",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.ReplyMessageRequest": {
+            "type": "object",
+            "required": [
+                "messageId",
+                "remoteJid",
+                "text"
+            ],
+            "properties": {
+                "messageId": {
+                    "type": "string"
+                },
+                "participant": {
+                    "type": "string"
+                },
+                "remoteJid": {
+                    "type": "string"
+                },
+                "text": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.RestartInstanceEvoCompatibility": {
+            "type": "object",
+            "properties": {
+                "instanceName": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.RestartInstanceResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "instance": {
+                    "$ref": "#/definitions/dto.RestartInstanceEvoCompatibility"
+                },
+                "state": {
                     "type": "string"
                 }
             }
@@ -5993,6 +6332,9 @@ const docTemplate = `{
         "dto.UpdateInstanceRequest": {
             "type": "object",
             "properties": {
+                "groupsIgnore": {
+                    "type": "boolean"
+                },
                 "proxyHost": {
                     "type": "string"
                 },
@@ -6291,6 +6633,17 @@ const docTemplate = `{
                 },
                 "success": {
                     "type": "boolean"
+                }
+            }
+        },
+        "whatsmiau.SendTextResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
                 }
             }
         },
