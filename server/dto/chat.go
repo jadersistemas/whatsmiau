@@ -55,3 +55,11 @@ type EditMessageRequest struct {
 	RemoteJid  string `json:"remoteJid" validate:"required"`
 	NewMessage string `json:"newMessage" validate:"required"`
 }
+
+type ReplyMessageRequest struct {
+	InstanceID  string `param:"instance" validate:"required" swaggerignore:"true"`
+	RemoteJid   string `json:"remoteJid" validate:"required"`
+	MessageId   string `json:"messageId" validate:"required"`
+	Text        string `json:"text" validate:"required"`
+	Participant string `json:"participant,omitempty"`
+}

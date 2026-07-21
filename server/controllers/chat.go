@@ -292,3 +292,60 @@ func (s *Chat) EditMessage(ctx echo.Context) error {
 
 	return ctx.JSON(http.StatusOK, map[string]interface{}{})
 }
+
+// ReplyMessage godoc
+// @Summary      Reply to a message
+// @Description  Sends a text reply to a specific message in a chat.
+// @Tags         Chat
+// @Accept       json
+// @Produce      json
+// @Security     ApiKeyAuth
+// @Param        instance  path      string                     true  "Instance ID"
+// @Param        body      body      dto.ReplyMessageRequest    true  "Reply parameters"
+// @Success      200       {object}  whatsmiau.SendTextResponse  "Reply sent successfully"
+// @Failure      400       {object}  utils.HTTPErrorResponse
+// @Failure      422       {object}  utils.HTTPErrorResponse
+// @Failure      500       {object}  utils.HTTPErrorResponse
+// @Router       /instance/{instance}/chat/reply [post]
+// @Router       /chat/reply/{instance} [post]
+func (s *Chat) ReplyMessage(ctx echo.Context) error {
+	var request dto.ReplyMessageRequest
+	if err := ctx.Bind(&request); err != nil {
+		return utils.HTTPFail(ctx, http.StatusUnprocessableEntity, err, "failed to bind request body")
+	}
+
+	if err := validator.New().Struct(&request); err != nil {
+		return utils.HTTPFail(ctx, http.StatusBadRequest, err, "invalid request body")
+	}
+
+	remoteJid, err := numberToJid(request.RemoteJid)
+	if err != nil {
+		zap.L().Error("error converting remoteJid to jid", zap.Error(err))
+		return utils.HTTPFail(ctx, http.StatusBadRequest, err, "invalid remoteJid format")
+	}
+
+	var participantJid *types.JID
+	if request.Participant != "" {
+		p, err := numberToJid(request.Participant)
+		if err != nil {
+			zap.L().Error("error converting participant to jid", zap.Error(err))
+			return utils.HTTPFail(ctx, http.StatusBadRequest, err, "invalid participant format")
+		}
+		participantJid = p
+	}
+
+	c := ctx.Request().Context()
+	result, err := s.whatsmiau.ReplyMessage(c, &whatsmiau.ReplyMessageRequest{
+		InstanceID:     request.InstanceID,
+		RemoteJID:      remoteJid,
+		MessageID:      request.MessageId,
+		Text:           request.Text,
+		ParticipantJID: participantJid,
+	})
+	if err != nil {
+		zap.L().Error("Whatsmiau.ReplyMessage failed", zap.Error(err))
+		return utils.HTTPFail(ctx, http.StatusInternalServerError, err, "failed to reply to message")
+	}
+
+	return ctx.JSON(http.StatusOK, result)
+}

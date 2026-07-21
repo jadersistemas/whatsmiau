@@ -182,3 +182,48 @@ func (s *Whatsmiau) EditMessage(ctx context.Context, req *EditMessageRequest) er
 	_, err := client.SendMessage(ctx, chat, msg)
 	return err
 }
+
+type ReplyMessageRequest struct {
+	InstanceID    string     `json:"instance_id"`
+	RemoteJID     *types.JID `json:"remote_jid"`
+	MessageID     string     `json:"message_id"`
+	Text          string     `json:"text"`
+	ParticipantJID *types.JID `json:"participant_jid,omitempty"`
+}
+
+func (s *Whatsmiau) ReplyMessage(ctx context.Context, req *ReplyMessageRequest) (*SendTextResponse, error) {
+	client, ok := s.clients.Load(req.InstanceID)
+	if !ok {
+		return nil, whatsmeow.ErrClientIsNil
+	}
+	if client.Store == nil || client.Store.ID == nil {
+		return nil, fmt.Errorf("device is not connected")
+	}
+
+	chat := s.resolveJID(ctx, client, *req.RemoteJID)
+
+	contextInfo := &waE2E.ContextInfo{
+		StanzaID: proto.String(req.MessageID),
+	}
+	if req.ParticipantJID != nil {
+		participant := req.ParticipantJID.String()
+		contextInfo.Participant = proto.String(participant)
+	}
+
+	msg := &waE2E.Message{
+		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+			Text:        proto.String(req.Text),
+			ContextInfo: contextInfo,
+		},
+	}
+
+	res, err := client.SendMessage(ctx, chat, msg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SendTextResponse{
+		ID:        res.ID,
+		CreatedAt: res.Timestamp,
+	}, nil
+}
