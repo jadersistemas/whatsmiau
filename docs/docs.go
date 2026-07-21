@@ -5265,6 +5265,9 @@ const docTemplate = `{
                 "messageId": {
                     "type": "string"
                 },
+                "originalSender": {
+                    "type": "string"
+                },
                 "participant": {
                     "type": "string"
                 },

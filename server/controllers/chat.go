@@ -334,13 +334,24 @@ func (s *Chat) ReplyMessage(ctx echo.Context) error {
 		participantJid = p
 	}
 
+	var originalSenderJid *types.JID
+	if request.OriginalSender != "" {
+		p, err := numberToJid(request.OriginalSender)
+		if err != nil {
+			zap.L().Error("error converting originalSender to jid", zap.Error(err))
+			return utils.HTTPFail(ctx, http.StatusBadRequest, err, "invalid originalSender format")
+		}
+		originalSenderJid = p
+	}
+
 	c := ctx.Request().Context()
 	result, err := s.whatsmiau.ReplyMessage(c, &whatsmiau.ReplyMessageRequest{
-		InstanceID:     request.InstanceID,
-		RemoteJID:      remoteJid,
-		MessageID:      request.MessageId,
-		Text:           request.Text,
-		ParticipantJID: participantJid,
+		InstanceID:        request.InstanceID,
+		RemoteJID:         remoteJid,
+		MessageID:         request.MessageId,
+		Text:              request.Text,
+		ParticipantJID:    participantJid,
+		OriginalSenderJID: originalSenderJid,
 	})
 	if err != nil {
 		zap.L().Error("Whatsmiau.ReplyMessage failed", zap.Error(err))

@@ -184,11 +184,12 @@ func (s *Whatsmiau) EditMessage(ctx context.Context, req *EditMessageRequest) er
 }
 
 type ReplyMessageRequest struct {
-	InstanceID    string     `json:"instance_id"`
-	RemoteJID     *types.JID `json:"remote_jid"`
-	MessageID     string     `json:"message_id"`
-	Text          string     `json:"text"`
-	ParticipantJID *types.JID `json:"participant_jid,omitempty"`
+	InstanceID          string     `json:"instance_id"`
+	RemoteJID           *types.JID `json:"remote_jid"`
+	MessageID           string     `json:"message_id"`
+	Text                string     `json:"text"`
+	ParticipantJID      *types.JID `json:"participant_jid,omitempty"`
+	OriginalSenderJID   *types.JID `json:"original_sender_jid,omitempty"`
 }
 
 func (s *Whatsmiau) ReplyMessage(ctx context.Context, req *ReplyMessageRequest) (*SendTextResponse, error) {
@@ -202,11 +203,20 @@ func (s *Whatsmiau) ReplyMessage(ctx context.Context, req *ReplyMessageRequest) 
 
 	chat := s.resolveJID(ctx, client, *req.RemoteJID)
 
+	// Participant in ContextInfo = sender of the original message
+	// For groups: the participant who sent the original message
+	// For 1:1: the other person's JID (or empty if replying to own message)
+	var participant string
+	if req.OriginalSenderJID != nil {
+		participant = req.OriginalSenderJID.String()
+	} else if chat.Server == types.GroupServer && req.ParticipantJID != nil {
+		participant = req.ParticipantJID.String()
+	}
+
 	contextInfo := &waE2E.ContextInfo{
 		StanzaID: proto.String(req.MessageID),
 	}
-	if req.ParticipantJID != nil {
-		participant := req.ParticipantJID.String()
+	if participant != "" {
 		contextInfo.Participant = proto.String(participant)
 	}
 
