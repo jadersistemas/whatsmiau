@@ -247,3 +247,48 @@ func (s *Chat) DeleteMessageForEveryone(ctx echo.Context) error {
 
 	return ctx.JSON(http.StatusOK, map[string]interface{}{})
 }
+
+// EditMessage godoc
+// @Summary      Edit a sent message
+// @Description  Edits a previously sent message with new text content.
+// @Tags         Chat
+// @Accept       json
+// @Produce      json
+// @Security     ApiKeyAuth
+// @Param        instance  path      string                    true  "Instance ID"
+// @Param        body      body      dto.EditMessageRequest    true  "Message to edit"
+// @Success      200       {object}  map[string]interface{}    "Empty object on success"
+// @Failure      400       {object}  utils.HTTPErrorResponse
+// @Failure      422       {object}  utils.HTTPErrorResponse
+// @Failure      500       {object}  utils.HTTPErrorResponse
+// @Router       /instance/{instance}/chat/editMessage [put]
+// @Router       /chat/editMessage/{instance} [put]
+func (s *Chat) EditMessage(ctx echo.Context) error {
+	var request dto.EditMessageRequest
+	if err := ctx.Bind(&request); err != nil {
+		return utils.HTTPFail(ctx, http.StatusUnprocessableEntity, err, "failed to bind request body")
+	}
+
+	if err := validator.New().Struct(&request); err != nil {
+		return utils.HTTPFail(ctx, http.StatusBadRequest, err, "invalid request body")
+	}
+
+	remoteJid, err := numberToJid(request.RemoteJid)
+	if err != nil {
+		zap.L().Error("error converting remoteJid to jid", zap.Error(err))
+		return utils.HTTPFail(ctx, http.StatusBadRequest, err, "invalid remoteJid format")
+	}
+
+	c := ctx.Request().Context()
+	if err := s.whatsmiau.EditMessage(c, &whatsmiau.EditMessageRequest{
+		InstanceID: request.InstanceID,
+		RemoteJID:  remoteJid,
+		MessageID:  request.ID,
+		NewMessage: request.NewMessage,
+	}); err != nil {
+		zap.L().Error("Whatsmiau.EditMessage failed", zap.Error(err))
+		return utils.HTTPFail(ctx, http.StatusInternalServerError, err, "failed to edit message")
+	}
+
+	return ctx.JSON(http.StatusOK, map[string]interface{}{})
+}

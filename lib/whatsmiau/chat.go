@@ -5,9 +5,11 @@ import (
 	"time"
 
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
+	"google.golang.org/protobuf/proto"
 )
 
 type ReadMessageRequest struct {
@@ -150,6 +152,33 @@ func (s *Whatsmiau) DeleteMessageForEveryone(ctx context.Context, req *DeleteMes
 	}
 
 	msg := client.BuildRevoke(chat, sender, types.MessageID(req.MessageID))
+	_, err := client.SendMessage(ctx, chat, msg)
+	return err
+}
+
+type EditMessageRequest struct {
+	InstanceID string     `json:"instance_id"`
+	RemoteJID  *types.JID `json:"remote_jid"`
+	MessageID  string     `json:"message_id"`
+	NewMessage string     `json:"new_message"`
+}
+
+func (s *Whatsmiau) EditMessage(ctx context.Context, req *EditMessageRequest) error {
+	client, ok := s.clients.Load(req.InstanceID)
+	if !ok {
+		return whatsmeow.ErrClientIsNil
+	}
+	if client.Store == nil || client.Store.ID == nil {
+		return fmt.Errorf("device is not connected")
+	}
+
+	chat := s.resolveJID(ctx, client, *req.RemoteJID)
+
+	newContent := &waE2E.Message{
+		Conversation: proto.String(req.NewMessage),
+	}
+
+	msg := client.BuildEdit(chat, types.MessageID(req.MessageID), newContent)
 	_, err := client.SendMessage(ctx, chat, msg)
 	return err
 }

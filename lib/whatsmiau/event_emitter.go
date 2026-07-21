@@ -274,9 +274,15 @@ func (s *Whatsmiau) handleLoggedOut(id string) {
 }
 func (s *Whatsmiau) handleMessageEvent(id string, instance *models.Instance, e *events.Message, eventMap map[string]bool) {
 	if e.Message != nil {
-		if pm := e.Message.GetProtocolMessage(); pm != nil && pm.GetType() == waE2E.ProtocolMessage_REVOKE {
-			s.handleMessageDeleteEvent(id, instance, e, eventMap)
-			return
+		if pm := e.Message.GetProtocolMessage(); pm != nil {
+			switch pm.GetType() {
+			case waE2E.ProtocolMessage_REVOKE:
+				s.handleMessageDeleteEvent(id, instance, e, eventMap)
+				return
+			case waE2E.ProtocolMessage_MESSAGE_EDIT:
+				s.handleMessageEditEvent(id, instance, e, eventMap)
+				return
+			}
 		}
 	}
 
@@ -366,6 +372,66 @@ func (s *Whatsmiau) handleMessageDeleteEvent(id string, instance *models.Instanc
 	}
 
 	zap.L().Debug("message delete event", zap.String("instance", id), zap.Any("data", deleteData))
+	s.emit(wookEvent, instance.Webhook.Url)
+}
+
+func (s *Whatsmiau) handleMessageEditEvent(id string, instance *models.Instance, e *events.Message, eventMap map[string]bool) {
+	if !eventMap["MESSAGES_EDIT"] {
+		return
+	}
+
+	if canIgnoreGroup(e, instance) {
+		return
+	}
+
+	if canIgnoreMessage(e) {
+		return
+	}
+
+	pm := e.Message.GetProtocolMessage()
+	pKey := pm.GetKey()
+	if pKey == nil {
+		return
+	}
+
+	editedMsg := pm.GetEditedMessage()
+	var newMessage string
+	if editedMsg != nil {
+		newMessage = editedMsg.GetConversation()
+		if newMessage == "" {
+			if et := editedMsg.GetExtendedTextMessage(); et != nil {
+				newMessage = et.GetText()
+			}
+		}
+	}
+
+	ctx, c := context.WithTimeout(context.Background(), time.Second*5)
+	defer c()
+
+	remoteJid, _ := s.GetJidLid(ctx, id, e.Info.Chat)
+
+	keyRemoteJid := pKey.GetRemoteJID()
+	if keyRemoteJid == "" {
+		keyRemoteJid = remoteJid
+	}
+
+	editData := &WookMessageEditData{
+		Id:          pKey.GetID(),
+		RemoteJid:   keyRemoteJid,
+		FromMe:      pKey.GetFromMe(),
+		Participant: pKey.GetParticipant(),
+		NewMessage:  newMessage,
+		InstanceId:  instance.ID,
+	}
+
+	wookEvent := &WookEvent[WookMessageEditData]{
+		Instance: instance.ID,
+		Data:     editData,
+		DateTime: time.Now(),
+		Event:    WookMessagesEdit,
+	}
+
+	zap.L().Debug("message edit event", zap.String("instance", id), zap.Any("data", editData))
 	s.emit(wookEvent, instance.Webhook.Url)
 }
 

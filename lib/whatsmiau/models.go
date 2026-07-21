@@ -14,6 +14,7 @@ const (
 	WookContactsUpsert          Wook = "contacts.upsert"
 	WookConnectionUpdate        Wook = "connection.update"
 	WookMessagesDelete          Wook = "messages.delete"
+	WookMessagesEdit            Wook = "messages.edit"
 	WookMessagesSet             Wook = "messages.set"
 	WookGroupParticipantsUpdate Wook = "group-participants.update"
 )
@@ -272,6 +273,15 @@ type WookMessageDeleteData struct {
 	FromMe      bool   `json:"fromMe"`
 	Participant string `json:"participant,omitempty"`
 	Status      string `json:"status,omitempty"`
+	InstanceId  string `json:"instanceId,omitempty"`
+}
+
+type WookMessageEditData struct {
+	Id          string `json:"id,omitempty"`
+	RemoteJid   string `json:"remoteJid,omitempty"`
+	FromMe      bool   `json:"fromMe"`
+	Participant string `json:"participant,omitempty"`
+	NewMessage  string `json:"newMessage,omitempty"`
 	InstanceId  string `json:"instanceId,omitempty"`
 }
 

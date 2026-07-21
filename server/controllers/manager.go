@@ -27,6 +27,7 @@ var webhookEventOptions = map[whatsmiau.Wook]bool{
 	whatsmiau.WookContactsUpsert:           true,
 	whatsmiau.WookConnectionUpdate:         true,
 	whatsmiau.WookMessagesDelete:           true,
+	whatsmiau.WookMessagesEdit:             true,
 	whatsmiau.WookGroupParticipantsUpdate:  true,
 }
 
