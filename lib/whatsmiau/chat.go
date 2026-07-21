@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"go.mau.fi/whatsmeow"
+	waCommon "go.mau.fi/whatsmeow/proto/waCommon"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 	"go.uber.org/zap"
@@ -178,8 +179,22 @@ func (s *Whatsmiau) EditMessage(ctx context.Context, req *EditMessageRequest) er
 		Conversation: proto.String(req.NewMessage),
 	}
 
-	msg := client.BuildEdit(chat, types.MessageID(req.MessageID), newContent)
-	_, err := client.SendMessage(ctx, chat, msg)
+	// Build the edit protocol message manually instead of using BuildEdit,
+	// because BuildEdit doesn't set the Key correctly for all scenarios.
+	editMsg := &waE2E.Message{
+		ProtocolMessage: &waE2E.ProtocolMessage{
+			Key: &waCommon.MessageKey{
+				FromMe:    proto.Bool(true),
+				ID:        proto.String(req.MessageID),
+				RemoteJID: proto.String(chat.String()),
+			},
+			Type:          waE2E.ProtocolMessage_MESSAGE_EDIT.Enum(),
+			EditedMessage: newContent,
+			TimestampMS:   proto.Int64(time.Now().UnixMilli()),
+		},
+	}
+
+	_, err := client.SendMessage(ctx, chat, editMsg)
 	return err
 }
 
