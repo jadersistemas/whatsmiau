@@ -483,8 +483,8 @@ func (s *Whatsmiau) SendButtons(ctx context.Context, data *SendButtonsRequestDat
 	resolved := s.resolveJID(ctx, client, *data.RemoteJID)
 	data.RemoteJID = &resolved
 
-	// Build buttons
-	protoButtons := make([]*waE2E.ButtonsMessage_Button, 0, len(data.Buttons))
+	// Build buttons as native_flow buttons (new WhatsApp format)
+	buttons := make([]map[string]interface{}, 0, len(data.Buttons))
 	for _, btn := range data.Buttons {
 		title := strings.TrimSpace(btn.DisplayText)
 		if title == "" {
@@ -494,43 +494,79 @@ func (s *Whatsmiau) SendButtons(ctx context.Context, data *SendButtonsRequestDat
 		if buttonID == "" {
 			buttonID = title
 		}
-		protoButtons = append(protoButtons, &waE2E.ButtonsMessage_Button{
-			ButtonID: proto.String(buttonID),
-			ButtonText: &waE2E.ButtonsMessage_Button_ButtonText{
-				DisplayText: proto.String(title),
+		buttons = append(buttons, map[string]interface{}{
+			"button_id": buttonID,
+			"button_text": map[string]interface{}{
+				"display_text": title,
 			},
-			Type:           waE2E.ButtonsMessage_Button_RESPONSE.Enum(),
-			NativeFlowInfo: &waE2E.ButtonsMessage_Button_NativeFlowInfo{},
+			"type": 1,
 		})
 	}
-	if len(protoButtons) == 0 {
+	if len(buttons) == 0 {
 		return nil, fmt.Errorf("valid buttons are required")
 	}
 
-	// Build ButtonsMessage
-	buttonsMsg := &waE2E.ButtonsMessage{
-		ContentText: proto.String(data.Description),
-		HeaderType:  waE2E.ButtonsMessage_EMPTY.Enum(),
-		Buttons:     protoButtons,
-	}
-	if data.Title != "" {
-		buttonsMsg.HeaderType = waE2E.ButtonsMessage_TEXT.Enum()
-		buttonsMsg.Header = &waE2E.ButtonsMessage_Text{Text: data.Title}
-	}
-	if data.Footer != "" {
-		buttonsMsg.FooterText = proto.String(data.Footer)
+	// Build body
+	body := map[string]interface{}{
+		"text": data.Description,
 	}
 
-	// Wrap in FutureProofMessage (CRITICAL for rendering)
+	// Build header if title is provided
+	var header map[string]interface{}
+	if data.Title != "" {
+		header = map[string]interface{}{
+			"has_media": false,
+			"text":      data.Title,
+			"type":      1,
+		}
+	}
+
+	// Build footer if provided
+	var footer map[string]interface{}
+	if data.Footer != "" {
+		footer = map[string]interface{}{
+			"text": data.Footer,
+		}
+	}
+
+	// Build native_flow_message
+	nativeFlowMessage := map[string]interface{}{
+		"buttons": buttons,
+		"name":    "quick_reply",
+	}
+
+	// Build interactive_message
+	interactiveMessage := map[string]interface{}{
+		"body":                  body,
+		"footer":                footer,
+		"header":                header,
+		"interactive_message":   nativeFlowMessage,
+		"message_version":       1,
+	}
+
+	interactiveMsgJSON, err := json.Marshal(interactiveMessage)
+	if err != nil {
+		return nil, fmt.Errorf("marshal error: %w", err)
+	}
+
+	// Build the message using InteractiveMessage with NativeFlowMessage
 	message := &waE2E.Message{
-		DocumentWithCaptionMessage: &waE2E.FutureProofMessage{
-			Message: &waE2E.Message{
-				ButtonsMessage: buttonsMsg,
+		InteractiveMessage: &waE2E.InteractiveMessage{
+			InteractiveMessage: &waE2E.InteractiveMessage_NativeFlowMessage_{
+				NativeFlowMessage: &waE2E.InteractiveMessage_NativeFlowMessage{
+					MessageVersion: proto.Int32(1),
+					Buttons: []*waE2E.InteractiveMessage_NativeFlowMessage_NativeFlowButton{
+						{
+							Name:             proto.String("quick_reply"),
+							ButtonParamsJSON: proto.String(string(interactiveMsgJSON)),
+						},
+					},
+				},
 			},
 		},
 	}
 
-	// Extra binary nodes for buttons
+	// Extra binary nodes for interactive buttons
 	extraNodes := []waBinary.Node{{
 		Tag: "biz",
 		Content: []waBinary.Node{{
@@ -543,7 +579,7 @@ func (s *Whatsmiau) SendButtons(ctx context.Context, data *SendButtonsRequestDat
 				Tag: "native_flow",
 				Attrs: waBinary.Attrs{
 					"v":    "9",
-					"name": "mixed",
+					"name": "quick_reply",
 				},
 			}},
 		}},
