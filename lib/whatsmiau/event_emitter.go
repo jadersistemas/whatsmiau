@@ -273,6 +273,52 @@ func (s *Whatsmiau) handleLoggedOut(id string) {
 	s.clients.Delete(id)
 }
 func (s *Whatsmiau) handleMessageEvent(id string, instance *models.Instance, e *events.Message, eventMap map[string]bool) {
+	// Detect edit events via IsEdit flag (whatsmeow unwraps EditedMessage automatically)
+	if e.IsEdit {
+		if eventMap["MESSAGES_EDIT"] {
+			var newMessage string
+			if conv := e.Message.GetConversation(); conv != "" {
+				newMessage = conv
+			} else if et := e.Message.GetExtendedTextMessage(); et != nil {
+				newMessage = et.GetText()
+			} else if img := e.Message.GetImageMessage(); img != nil {
+				newMessage = img.GetCaption()
+			} else if vid := e.Message.GetVideoMessage(); vid != nil {
+				newMessage = vid.GetCaption()
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+			remoteJid, _ := s.GetJidLid(ctx, id, e.Info.Chat)
+			cancel()
+
+			editData := &WookMessageEditData{
+				Id:             e.Info.ID,
+				EventMessageId: e.Info.ID,
+				RemoteJid:      remoteJid,
+				FromMe:         e.Info.IsFromMe,
+				Participant:    e.Info.Sender.String(),
+				NewMessage:     newMessage,
+				InstanceId:     instance.ID,
+			}
+
+			wookEvent := &WookEvent[WookMessageEditData]{
+				Instance: instance.ID,
+				Data:     editData,
+				DateTime: time.Now(),
+				Event:    WookMessagesEdit,
+			}
+
+			zap.L().Debug("message edit event",
+				zap.String("instance", id),
+				zap.String("id", e.Info.ID),
+				zap.Bool("fromMe", e.Info.IsFromMe),
+				zap.String("newMessage", newMessage),
+			)
+			s.emit(wookEvent, instance.Webhook.Url)
+		}
+		return
+	}
+
 	if e.Message != nil {
 		pm := e.Message.GetProtocolMessage()
 		if pm != nil {
@@ -280,27 +326,11 @@ func (s *Whatsmiau) handleMessageEvent(id string, instance *models.Instance, e *
 			case waE2E.ProtocolMessage_REVOKE:
 				s.handleMessageDeleteEvent(id, instance, e, eventMap)
 				return
-			case waE2E.ProtocolMessage_MESSAGE_EDIT:
-				s.handleMessageEditEvent(id, instance, e, eventMap)
-				return
 			default:
 				zap.L().Debug("protocol message received",
 					zap.String("instance", id),
 					zap.String("type", pm.GetType().String()),
 					zap.Any("message", e.Message),
-				)
-			}
-		} else {
-			// Debug: check if this might be an edit event that wasn't detected
-			conversation := e.Message.GetConversation()
-			editedMsg := e.Message.GetEditedMessage()
-			if editedMsg != nil || (conversation == "" && e.Message.GetExtendedTextMessage() == nil) {
-				zap.L().Debug("message event with nil ProtocolMessage - possible edit",
-					zap.String("instance", id),
-					zap.String("info_id", e.Info.ID),
-					zap.Bool("has_edited_msg", editedMsg != nil),
-					zap.String("conversation", conversation),
-					zap.Any("message_keys", fmt.Sprintf("%v", e.Message)),
 				)
 			}
 		}
@@ -322,61 +352,6 @@ func (s *Whatsmiau) handleMessageEvent(id string, instance *models.Instance, e *
 	if messageData == nil {
 		zap.L().Error("failed to convert event", zap.String("id", id), zap.String("type", fmt.Sprintf("%T", e)), zap.Any("raw", e))
 		return
-	}
-
-	// Fallback: detect edit events that weren't caught by ProtocolMessage check
-	// Edit events often have empty messageType and no useful message content
-	if messageData.MessageType == "unknown" {
-		if eventMap["MESSAGES_EDIT"] {
-			// Try to extract edit info from the raw message
-			if e.Message != nil {
-				editedMsg := e.Message.GetEditedMessage()
-				zap.L().Debug("fallback edit check",
-					zap.String("instance", id),
-					zap.String("id", e.Info.ID),
-					zap.Bool("has_edited_msg", editedMsg != nil),
-				)
-				if editedMsg != nil {
-					var newMessage string
-					inner := editedMsg.GetMessage()
-					if inner != nil {
-						if conv := inner.GetConversation(); conv != "" {
-							newMessage = conv
-						} else if et := inner.GetExtendedTextMessage(); et != nil {
-							newMessage = et.GetText()
-						}
-					}
-
-					ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-					remoteJid, _ := s.GetJidLid(ctx, id, e.Info.Chat)
-					cancel()
-
-					editData := &WookMessageEditData{
-						Id:             e.Info.ID,
-						EventMessageId: e.Info.ID,
-						RemoteJid:      remoteJid,
-						FromMe:         e.Info.IsFromMe,
-						NewMessage:     newMessage,
-						InstanceId:     instance.ID,
-					}
-
-					wookEvent := &WookEvent[WookMessageEditData]{
-						Instance: instance.ID,
-						Data:     editData,
-						DateTime: time.Now(),
-						Event:    WookMessagesEdit,
-					}
-
-					zap.L().Debug("message edit detected via fallback",
-						zap.String("instance", id),
-						zap.String("id", e.Info.ID),
-						zap.String("newMessage", newMessage),
-					)
-					s.emit(wookEvent, instance.Webhook.Url)
-					return
-				}
-			}
-		}
 	}
 
 	messageData.InstanceId = instance.ID
