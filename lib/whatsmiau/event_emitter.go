@@ -351,6 +351,9 @@ func (s *Whatsmiau) handleMessageEvent(id string, instance *models.Instance, e *
 			case waE2E.ProtocolMessage_REVOKE:
 				s.handleMessageDeleteEvent(id, instance, e, eventMap)
 				return
+			case waE2E.ProtocolMessage_MESSAGE_EDIT:
+				s.handleMessageEditEvent(id, instance, e, eventMap)
+				return
 			default:
 				zap.L().Debug("protocol message received",
 					zap.String("instance", id),
