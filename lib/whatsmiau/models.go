@@ -98,26 +98,33 @@ type WookKey struct {
 }
 
 type WookMessageRaw struct {
-	Conversation         string                   `json:"conversation,omitempty"`
-	Base64               string                   `json:"base64,omitempty"`
-	ImageMessage         *WookImageMessageRaw     `json:"imageMessage,omitempty"`
-	DocumentMessage      *WookDocumentMessageRaw  `json:"documentMessage,omitempty"`
-	VideoMessage         *WookVideoMessageRaw     `json:"videoMessage,omitempty"`
-	AudioMessage         *WookAudioMessageRaw     `json:"audioMessage,omitempty"`
-	ReactionMessage      *ReactionMessageRaw      `json:"reactionMessage,omitempty"`
-	ContactMessage       *ContactMessageRaw       `json:"contactMessage,omitempty"`
-	ContactsArrayMessage *ContactsArrayMessageRaw `json:"contactsArrayMessage,omitempty"`
+	Conversation         string                           `json:"conversation,omitempty"`
+	Base64               string                           `json:"base64,omitempty"`
+	ImageMessage         *WookImageMessageRaw             `json:"imageMessage,omitempty"`
+	DocumentMessage      *WookDocumentMessageRaw          `json:"documentMessage,omitempty"`
+	VideoMessage         *WookVideoMessageRaw             `json:"videoMessage,omitempty"`
+	AudioMessage         *WookAudioMessageRaw             `json:"audioMessage,omitempty"`
+	ReactionMessage      *ReactionMessageRaw              `json:"reactionMessage,omitempty"`
+	ContactMessage       *ContactMessageRaw               `json:"contactMessage,omitempty"`
+	ContactsArrayMessage *ContactsArrayMessageRaw         `json:"contactsArrayMessage,omitempty"`
 	//MessageContextInfo  WookMessageContextInfo `json:"messageContextInfo,omitempty"`
 
-	ListResponseMessage *WookListMessageRaw         `json:"listResponseMessage,omitempty"`
-	StickerMessage      *WookStickerMessageRaw      `json:"stickerMessage,omitempty"`
-	LocationMessage     *WookLocationMessageRaw     `json:"locationMessage,omitempty"`
-	LiveLocationMessage *WookLiveLocationMessageRaw `json:"liveLocationMessage,omitempty"`
-	PollCreationMessage *WookPollCreationMessageRaw `json:"pollCreationMessage,omitempty"`
-	PollUpdateMessage   *WookPollUpdateMessageRaw   `json:"pollUpdateMessage,omitempty"`
-	PtvMessage          *WookPtvMessageRaw          `json:"ptvMessage,omitempty"`
-	EncCommentMessage   *WookEncCommentMessageRaw   `json:"encCommentMessage,omitempty"`
-	MediaURL            string                      `json:"mediaUrl,omitempty"` // Sent when connect with some storage
+	ListResponseMessage    *WookListMessageRaw             `json:"listResponseMessage,omitempty"`
+	ButtonsResponseMessage *WookButtonsResponseMessageRaw  `json:"buttonsResponseMessage,omitempty"`
+	StickerMessage         *WookStickerMessageRaw          `json:"stickerMessage,omitempty"`
+	LocationMessage        *WookLocationMessageRaw         `json:"locationMessage,omitempty"`
+	LiveLocationMessage    *WookLiveLocationMessageRaw     `json:"liveLocationMessage,omitempty"`
+	PollCreationMessage    *WookPollCreationMessageRaw     `json:"pollCreationMessage,omitempty"`
+	PollUpdateMessage      *WookPollUpdateMessageRaw       `json:"pollUpdateMessage,omitempty"`
+	PtvMessage             *WookPtvMessageRaw              `json:"ptvMessage,omitempty"`
+	EncCommentMessage      *WookEncCommentMessageRaw       `json:"encCommentMessage,omitempty"`
+	MediaURL               string                          `json:"mediaUrl,omitempty"` // Sent when connect with some storage
+}
+
+type WookButtonsResponseMessageRaw struct {
+	SelectedButtonID   string `json:"selectedButtonID,omitempty"`
+	SelectedDisplayText string `json:"selectedDisplayText,omitempty"`
+	Type               string `json:"type,omitempty"`
 }
 
 type ContactsArrayMessageRaw struct {
