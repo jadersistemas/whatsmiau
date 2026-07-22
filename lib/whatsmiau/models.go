@@ -284,12 +284,13 @@ type WookMessageDeleteData struct {
 }
 
 type WookMessageEditData struct {
-	Id          string `json:"id,omitempty"`
-	RemoteJid   string `json:"remoteJid,omitempty"`
-	FromMe      bool   `json:"fromMe"`
-	Participant string `json:"participant,omitempty"`
-	NewMessage  string `json:"newMessage,omitempty"`
-	InstanceId  string `json:"instanceId,omitempty"`
+	Id             string `json:"id,omitempty"`
+	EventMessageId string `json:"eventMessageId,omitempty"`
+	RemoteJid      string `json:"remoteJid,omitempty"`
+	FromMe         bool   `json:"fromMe"`
+	Participant    string `json:"participant,omitempty"`
+	NewMessage     string `json:"newMessage,omitempty"`
+	InstanceId     string `json:"instanceId,omitempty"`
 }
 
 type WookMessageUpdateData struct {
