@@ -273,6 +273,31 @@ func (s *Whatsmiau) handleLoggedOut(id string) {
 	s.clients.Delete(id)
 }
 func (s *Whatsmiau) handleMessageEvent(id string, instance *models.Instance, e *events.Message, eventMap map[string]bool) {
+	// DEBUG: log all message events to understand edit detection
+	if e.Message != nil {
+		pm := e.Message.GetProtocolMessage()
+		hasProto := pm != nil
+		protoType := ""
+		if hasProto {
+			protoType = pm.GetType().String()
+		}
+		hasEdited := e.Message.GetEditedMessage() != nil
+		conv := e.Message.GetConversation()
+		hasExtText := e.Message.GetExtendedTextMessage() != nil
+
+		zap.L().Debug("message event debug",
+			zap.String("instance", id),
+			zap.String("info_id", e.Info.ID),
+			zap.Bool("isEdit", e.IsEdit),
+			zap.Bool("hasProtocolMessage", hasProto),
+			zap.String("protocolType", protoType),
+			zap.Bool("hasEditedMessage", hasEdited),
+			zap.String("conversation", conv),
+			zap.Bool("hasExtendedText", hasExtText),
+			zap.Bool("isFromMe", e.Info.IsFromMe),
+		)
+	}
+
 	// Detect edit events via IsEdit flag (whatsmeow unwraps EditedMessage automatically)
 	if e.IsEdit {
 		if eventMap["MESSAGES_EDIT"] {
