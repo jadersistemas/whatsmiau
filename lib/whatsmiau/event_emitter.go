@@ -377,12 +377,6 @@ func (s *Whatsmiau) handleMessageEvent(id string, instance *models.Instance, e *
 				}
 			}
 		}
-		// If not an edit or edit not enabled, skip this unknown message
-		zap.L().Debug("skipping unknown message type",
-			zap.String("instance", id),
-			zap.String("id", e.Info.ID),
-		)
-		return
 	}
 
 	messageData.InstanceId = instance.ID
