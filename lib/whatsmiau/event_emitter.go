@@ -355,11 +355,12 @@ func (s *Whatsmiau) handleMessageEvent(id string, instance *models.Instance, e *
 				s.handleMessageEditEvent(id, instance, e, eventMap)
 				return
 			default:
-				zap.L().Debug("protocol message received",
+				zap.L().Debug("protocol message received, ignoring",
 					zap.String("instance", id),
 					zap.String("type", pm.GetType().String()),
 					zap.Any("message", e.Message),
 				)
+				return
 			}
 		}
 	}
