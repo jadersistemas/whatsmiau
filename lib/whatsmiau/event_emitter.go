@@ -273,77 +273,65 @@ func (s *Whatsmiau) handleLoggedOut(id string) {
 	s.clients.Delete(id)
 }
 func (s *Whatsmiau) handleMessageEvent(id string, instance *models.Instance, e *events.Message, eventMap map[string]bool) {
-	// DEBUG: log all message events to understand edit detection
-	if e.Message != nil {
-		pm := e.Message.GetProtocolMessage()
-		hasProto := pm != nil
-		protoType := ""
-		if hasProto {
-			protoType = pm.GetType().String()
-		}
-		hasEdited := e.Message.GetEditedMessage() != nil
-		conv := e.Message.GetConversation()
-		hasExtText := e.Message.GetExtendedTextMessage() != nil
+	// Detect edit events via RawMessage (unmodified by whatsmeow's client.go)
+	// client.go replaces e.Message with the edited content, but e.RawMessage stays intact
+	if e.RawMessage != nil {
+		if rawPM := e.RawMessage.GetProtocolMessage(); rawPM != nil {
+			if rawPM.GetType() == waE2E.ProtocolMessage_MESSAGE_EDIT {
+				if eventMap["MESSAGES_EDIT"] {
+					var newMessage string
+					// e.Message already contains the edited content (replaced by client.go)
+					if e.Message != nil {
+						if conv := e.Message.GetConversation(); conv != "" {
+							newMessage = conv
+						} else if et := e.Message.GetExtendedTextMessage(); et != nil {
+							newMessage = et.GetText()
+						} else if img := e.Message.GetImageMessage(); img != nil {
+							newMessage = img.GetCaption()
+						} else if vid := e.Message.GetVideoMessage(); vid != nil {
+							newMessage = vid.GetCaption()
+						}
+					}
 
-		zap.L().Debug("message event debug",
-			zap.String("instance", id),
-			zap.String("info_id", e.Info.ID),
-			zap.Bool("isEdit", e.IsEdit),
-			zap.Bool("hasProtocolMessage", hasProto),
-			zap.String("protocolType", protoType),
-			zap.Bool("hasEditedMessage", hasEdited),
-			zap.String("conversation", conv),
-			zap.Bool("hasExtendedText", hasExtText),
-			zap.Bool("isFromMe", e.Info.IsFromMe),
-		)
+					// Get original message ID from RawMessage's ProtocolMessage.Key
+					originalMsgID := rawPM.GetKey().GetID()
+
+					ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+					remoteJid, _ := s.GetJidLid(ctx, id, e.Info.Chat)
+					cancel()
+
+					editData := &WookMessageEditData{
+						Id:             originalMsgID,
+						EventMessageId: e.Info.ID,
+						RemoteJid:      remoteJid,
+						FromMe:         e.Info.IsFromMe,
+						Participant:    e.Info.Sender.String(),
+						NewMessage:     newMessage,
+						InstanceId:     instance.ID,
+					}
+
+					wookEvent := &WookEvent[WookMessageEditData]{
+						Instance: instance.ID,
+						Data:     editData,
+						DateTime: time.Now(),
+						Event:    WookMessagesEdit,
+					}
+
+					zap.L().Info("message edit detected via RawMessage",
+						zap.String("instance", id),
+						zap.String("originalMsgID", originalMsgID),
+						zap.String("eventMsgID", e.Info.ID),
+						zap.Bool("fromMe", e.Info.IsFromMe),
+						zap.String("newMessage", newMessage),
+					)
+					s.emit(wookEvent, instance.Webhook.Url)
+				}
+				return
+			}
+		}
 	}
 
-	// Detect edit events via IsEdit flag (whatsmeow unwraps EditedMessage automatically)
-	if e.IsEdit {
-		if eventMap["MESSAGES_EDIT"] {
-			var newMessage string
-			if conv := e.Message.GetConversation(); conv != "" {
-				newMessage = conv
-			} else if et := e.Message.GetExtendedTextMessage(); et != nil {
-				newMessage = et.GetText()
-			} else if img := e.Message.GetImageMessage(); img != nil {
-				newMessage = img.GetCaption()
-			} else if vid := e.Message.GetVideoMessage(); vid != nil {
-				newMessage = vid.GetCaption()
-			}
-
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-			remoteJid, _ := s.GetJidLid(ctx, id, e.Info.Chat)
-			cancel()
-
-			editData := &WookMessageEditData{
-				Id:             e.Info.ID,
-				EventMessageId: e.Info.ID,
-				RemoteJid:      remoteJid,
-				FromMe:         e.Info.IsFromMe,
-				Participant:    e.Info.Sender.String(),
-				NewMessage:     newMessage,
-				InstanceId:     instance.ID,
-			}
-
-			wookEvent := &WookEvent[WookMessageEditData]{
-				Instance: instance.ID,
-				Data:     editData,
-				DateTime: time.Now(),
-				Event:    WookMessagesEdit,
-			}
-
-			zap.L().Debug("message edit event",
-				zap.String("instance", id),
-				zap.String("id", e.Info.ID),
-				zap.Bool("fromMe", e.Info.IsFromMe),
-				zap.String("newMessage", newMessage),
-			)
-			s.emit(wookEvent, instance.Webhook.Url)
-		}
-		return
-	}
-
+	// Also check e.Message (in case RawMessage is nil for some events)
 	if e.Message != nil {
 		pm := e.Message.GetProtocolMessage()
 		if pm != nil {
@@ -358,7 +346,6 @@ func (s *Whatsmiau) handleMessageEvent(id string, instance *models.Instance, e *
 				zap.L().Debug("protocol message received, ignoring",
 					zap.String("instance", id),
 					zap.String("type", pm.GetType().String()),
-					zap.Any("message", e.Message),
 				)
 				return
 			}
